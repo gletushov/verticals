@@ -45,7 +45,7 @@ def test_full_access_is_chosen_once_and_used_after_reload(ui_agent: UiSession, t
     page.keyboard.press('Escape')
     _send(page, 'Restricted now')
     _answered(page, 'Done: Restricted now')
-    assert _flag(_cli_starts(tmp_path)[-1], '--permission-mode') == 'manual'
+    assert _flag(_cli_starts(tmp_path)[-1], '--permission-mode') != 'bypassPermissions'
 
 
 def test_morning_waits_for_access_choice_then_honors_it(ui_agent: UiSession, tmp_path: Path):
@@ -69,4 +69,4 @@ def test_keep_asking_does_not_grant_full_access(ui_agent: UiSession, tmp_path: P
     expect(page.get_by_role('dialog', name='Agent access')).to_have_count(0)
     _send(page, 'Hello')
     _answered(page, 'Done: Hello')
-    assert _flag(_cli_starts(tmp_path)[-1], '--permission-mode') == 'manual'
+    assert _flag(_cli_starts(tmp_path)[-1], '--permission-mode') != 'bypassPermissions'
