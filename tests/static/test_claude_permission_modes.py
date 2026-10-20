@@ -25,3 +25,9 @@ def test_morning_mode_still_refuses_a_tool_outside_approved_sources():
     agent, session = _claude({"sources": "connected"})
     _tool(agent, "mcp__unapproved__read_history")
     assert session.asked == ["Allow Claude to use mcp__unapproved__read_history?"]
+
+
+def test_streaming_launch_uses_the_stdio_permission_transport():
+    agent, _ = _claude({"sources": "connected"})
+    assert _flag(agent, "--permission-prompt-tool") == "stdio"
+    assert "--permission-prompts" not in agent.proc.args

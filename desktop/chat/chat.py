@@ -499,7 +499,7 @@ class ClaudeAgent:
         args = [which("claude"), "--print", "--verbose", "--include-partial-messages",
                 "--input-format", "stream-json", "--output-format", "stream-json",
                 "--permission-mode", ASK_FIRST if mode in (BOARD_ONLY, "manual") else mode,
-                "--permission-prompts", "host", "--permission-prompt-tool", "stdio",
+                "--permission-prompt-tool", "stdio",
                 *([] if self.connected or self.full else ["--strict-mcp-config"]), "--mcp-config", str(chat.claude_config(getattr(s, "id", None))),
                 "--settings", json.dumps(claude_settings),
                 *(["--add-dir", str(Path.home())] if self.full else ["--tools", ""]),
