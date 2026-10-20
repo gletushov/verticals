@@ -2,6 +2,7 @@
    as long as the tab: the day rollover, the live board, ⌘Z, the drag's window listeners (a card arms a drag in any
    view, so arm and release live in the one lifetime that spans them all), the windows' keys and the morning report. */
 import { Board } from './components/Board'
+import { AgentAccess } from './components/AgentAccess'
 import { GoalCard } from './components/GoalCard'
 import { InboxView } from './components/InboxView'
 import { DocsView } from './components/DocsView'
@@ -38,7 +39,7 @@ import { startSessionWatch } from './lib/taskSessions'
 import { takeSelection } from './lib/pageSelection'
 import { makeReport } from './lib/report'
 import { pictures, reporting } from './lib/reportPictures'
-import { nextTick, onMounted, onUnmounted, ref } from './reactivity'
+import { nextTick, onMounted, onUnmounted, ref, watch } from './reactivity'
 import { cx } from './bind'
 import { tracked } from './tracked'
 import { useSetup } from './setup'
@@ -228,6 +229,7 @@ export const App = tracked(function App() {
     async function morningCheck(): Promise<void> {
       await ensureMorning(todayIso())
     }
+    watch(() => agentChat.accessChosen, (chosen) => { if (chosen) void morningCheck() })
     onMounted(() => {
       void startAgentChat().then(() => { startSessionWatch(); return morningCheck() })
       window.addEventListener('verticals:discuss-goal', onDiscussGoal)
@@ -254,6 +256,7 @@ export const App = tracked(function App() {
   return (
     <CardDnd>
       <div className="app-shell">
+        <AgentAccess />
         {store.state.activeView === 'verticals' && store.state.openGoalVertical !== 'search' && !unfocused
           ? <div className="board-top-fade" aria-hidden="true"></div> : null}
         <div className={cx('app-veil', { 'is-shown': unfocused, 'app-veil--window': windowOpen })} data-role="out-of-focus"
