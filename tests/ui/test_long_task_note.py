@@ -14,7 +14,6 @@ def test_long_board_task_keeps_its_text_in_notes(ui_f2, words):
     add.click()
     field=add.locator('[data-role="column-add-editor"]')
     field.fill(words)
-    ui_f2.expects_network_failures=True  # the old implementation returns 422
     with page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/api/goals')) as response:
         field.press('Enter')
     assert response.value.status==201
