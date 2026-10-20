@@ -56,7 +56,7 @@ def setup(tmp_path, monkeypatch):
             raise AssertionError(method)
 
     monkeypatch.setattr(chat, 'RpcProcess', Rpc)
-    monkeypatch.setattr(chat, 'codex_args', lambda _: ['codex', 'app-server'])
+    monkeypatch.setattr(chat, 'codex_args', lambda *args, **kwargs: ['codex', 'app-server'])
 
     def start(entry=None, thread=None, settings=None, key=None, quiet=False):
         key = key or str(uuid.uuid4())
