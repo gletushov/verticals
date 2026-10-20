@@ -518,7 +518,8 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
       words.typed(commandFilter.text)
       focusField()
     }
-    function onShapeClick(): void {
+    function onShapeClick(event: MouseEvent): void {
+      if (event.target === input.value) return
       if (brushing?.swallowed()) return // the end of a drag is no click on the answer
       if (circleWords.value?.kind === 'answer') reply()
       else if (!circleWords.value) focusField()
