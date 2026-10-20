@@ -1,5 +1,6 @@
 // One reactive board state tree; write helpers mutate records in place for immediate rendering.
 
+import { wordsToGoal } from './lib/goalDraft'
 import { reactive, computed, type ComputedRef } from './reactivity'
 import { toast } from './kit'
 import {
@@ -342,15 +343,15 @@ function bumpAncestorProgress(id: string, delta: number): void {
  *  own `vertical` prop, which already carries the literal `"maybe"` string for that column
  *  (`toColumnData` above) — so the caller never needs to special-case which column it is. */
 async function createGoalOn(verticalBucket: string, title: string): Promise<string | null> {
-  const trimmed = title.trim()
-  if (!trimmed) return null
-  const payload =
+  const draft = wordsToGoal(title)
+  if (!draft.title) return null
+  const payload: Parameters<typeof createGoal>[0] =
     verticalBucket === 'maybe'
-      ? { title: trimmed }
-      : { title: trimmed, vertical: verticalBucket, anchor_date: state.board?.anchor_date ?? todayIso() }
+      ? draft
+      : { ...draft, vertical: verticalBucket, anchor_date: state.board?.anchor_date ?? todayIso() }
   // A filtered board leaves a new top goal out, so it shows only on the unfiltered board, as before.
   const placement = state.valueFilter ? null : createPlacement(() => state.board, {
-    title: trimmed, vertical: payload.vertical ?? null, anchorDate: payload.anchor_date ?? null,
+    title: draft.title, vertical: payload.vertical ?? null, anchorDate: payload.anchor_date ?? null,
   })
   try {
     const created = await createGoal(payload)

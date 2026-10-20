@@ -16,6 +16,8 @@ import { todayIso } from '../store'
 import { moving } from './moving'
 import { desk } from './docsDesk'
 import { isSource } from './sources'
+import { wordsToGoal } from './goalDraft'
+export { wordsToGoal } from './goalDraft'
 import type { DeskDoc } from './api'
 
 export const SHELVES: ReadonlyArray<readonly [string, string]> = [
@@ -99,16 +101,6 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export function leftOn(g: InboxGoal): string {
   const d = new Date(g.created_at)
   return `${shelfName(columnOf(g))} · ${d.getDate()} ${MONTHS[d.getMonth()]}`
-}
-
-/** A goal's title holds one line of at most 250 characters (`field_rules.py`): your words are joined into one line, and
- *  longer ones cut at a word with the whole text kept as the goal's description. */
-export function wordsToGoal(text: string): { title: string; body?: string } {
-  const line = text.replace(/\s+/g, ' ').trim()
-  if (line.length <= 250) return { title: line }
-  const cut = line.slice(0, 249)
-  const at = cut.lastIndexOf(' ')
-  return { title: `${(at > 150 ? cut.slice(0, at) : cut).trimEnd()}…`, body: text.trim() }
 }
 
 /** A task ticked off in the Inbox is a step of the board's history like any tick (docs/design/board-undo.md): undo brings
