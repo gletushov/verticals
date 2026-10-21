@@ -30,10 +30,10 @@ class QuickEntry:
         with self.lock:
             status = self.state / 'quick-entry-status.json'
             if value is None:
-                return read(status, {'binding': 'fn', 'registered': False, 'error': 'Native app has not registered the key yet'})
-            if not isinstance(value, str) or not re.fullmatch(r'fn|(?:(?:ctrl|alt|cmd|shift)\+)*key:[0-9]{1,3}', value):
-                raise ValueError('Use fn or modifiers + a macOS key code, e.g. ctrl+alt+key:49 (Space).')
-            if value != 'fn' and int(value.rsplit(':',1)[1]) > 127:
+                return read(status, {'binding': 'cmd+shift', 'registered': False, 'error': 'Native app has not registered the key yet'})
+            if not isinstance(value, str) or not re.fullmatch(r'fn|(?:ctrl|alt|cmd|shift)(?:\+(?:ctrl|alt|cmd|shift))*|(?:(?:ctrl|alt|cmd|shift)\+)*key:[0-9]{1,3}', value):
+                raise ValueError('Use fn, cmd+shift, or modifiers + a macOS key code, e.g. ctrl+alt+key:49 (Space).')
+            if 'key:' in value and int(value.rsplit(':',1)[1]) > 127:
                 raise ValueError('Key code must be between 0 and 127')
             request = str(uuid.uuid4())
             write(self.state / 'quick-entry-request.json', {'id': request, 'binding': value})
@@ -44,6 +44,15 @@ class QuickEntry:
                     return result
                 time.sleep(.05)
             raise ValueError('Native app did not acknowledge the binding. Read quick_entry_binding before retrying.')
+
+    def onboard(self):
+        marker = self.state / 'quick-entry-onboarding.json'
+        if marker.exists(): return
+        body = 'Нажми и отпусти ⌘⇧ (Command + Shift) без других клавиш — откроется быстрый ввод. ⌘Enter сохраняет мысль в Inbox; «Отправить агенту» запускает разговор в фоне.\n\nОткрой Системные настройки → Конфиденциальность и безопасность → Универсальный доступ и разреши запущенной копии Verticals работать с клавиатурой.\n\nХочешь другое сочетание или ввод не работает? Нажми «Discuss with agent» в этой задаче и скажи агенту. После пробы задачу можно завершить — снова она не появится.'
+        result = self.chat.api('POST','/api/goals',
+            {'title':'Попробовать быстрый ввод', 'body':body},
+            idempotency_key='quick-entry-onboarding-v1')
+        write(marker, {'goal':result['id']})
 
     def conversations(self):
         rows = [read(p, {}).get('thread') for p in (self.state / 'quick-entry-receipts').glob('*.json')]

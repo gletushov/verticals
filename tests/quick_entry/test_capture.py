@@ -49,6 +49,17 @@ class CaptureTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.q.binding(binding)
         self.assertEqual(self.q.binding()['binding'],'fn')
         self.assertFalse((Path(self.tmp.name)/'quick-entry-request.json').exists())
+    def test_onboarding_created_once_across_restarts_and_preserves_user_edits(self):
+        self.q.onboard()
+        m.QuickEntry(self.tmp.name,self.chat).onboard()
+        self.assertEqual(len(self.chat.created),1)
+        method,path,payload,options=self.chat.created[0]
+        self.assertEqual((method,path),('POST','/api/goals'))
+        self.assertIn('⌘⇧',payload['body'])
+        self.assertIn('Универсальный доступ',payload['body'])
+        self.assertIn('агент',payload['body'])
+        self.assertEqual(options['idempotency_key'],'quick-entry-onboarding-v1')
+        self.assertNotIn('vertical',payload)
     def test_long_text_keeps_full_body(self):
         words='Длинная мысль '*40
         self.q.capture({'request':'long','action':'inbox','text':words})

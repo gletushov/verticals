@@ -30,12 +30,12 @@ final class QuickEntry: NSObject {
     var captureID = UUID().uuidString
     var captureText = ""
     var captureAction = ""
-    var binding = "fn"
+    var binding = "cmd+shift"
     var hotkey: EventHotKeyRef?
     var handler: EventHandlerRef?
     var globalMonitor: Any?
     var localMonitor: Any?
-    var tap = FnTap()
+    var tap = ModifierTap(required: 6)
     var timer: Timer?
     var lastRequest = ""
 
@@ -49,8 +49,8 @@ final class QuickEntry: NSObject {
             let entry = Unmanaged<QuickEntry>.fromOpaque(pointer).takeUnretainedValue()
             entry.show(); return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
-        let saved = read("quick-entry-binding.json")?["binding"] as? String ?? "fn"
-        if saved == "fn" && !AXIsProcessTrusted() {
+        let saved = read("quick-entry-binding.json")?["binding"] as? String ?? "cmd+shift"
+        if !saved.contains("key:") && !AXIsProcessTrusted() {
             _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
         }
         let error = register(saved)
@@ -71,11 +71,11 @@ final class QuickEntry: NSObject {
     func status(request: String, error: String?) {
         write("quick-entry-status.json", ["request": request, "binding": binding,
               "registered": hotkey != nil || globalMonitor != nil, "applied": error == nil, "error": error ?? "",
-              "accessibility": AXIsProcessTrusted()])
+              "accessibility": AXIsProcessTrusted(), "app_path": Bundle.main.bundlePath, "pid": ProcessInfo.processInfo.processIdentifier])
     }
     func poll() {
-        if binding == "fn" && globalMonitor == nil && AXIsProcessTrusted() {
-            status(request: lastRequest, error: register("fn"))
+        if !binding.contains("key:") && globalMonitor == nil && AXIsProcessTrusted() {
+            status(request: lastRequest, error: register(binding))
         }
         guard let request = read("quick-entry-request.json"), let id = request["id"] as? String,
               id != lastRequest, let value = request["binding"] as? String else { return }
@@ -85,12 +85,12 @@ final class QuickEntry: NSObject {
         status(request: id, error: error)
     }
     func register(_ value: String) -> String? {
-        if value == "fn" && !AXIsProcessTrusted() {
-            return "Fn needs Accessibility access for this app, then reapply fn. Menu Quick Entry works meanwhile."
+        if !value.contains("key:") && !AXIsProcessTrusted() {
+            return "Modifier-only shortcuts need Accessibility access for this running app. Quick Entry in the menu works meanwhile."
         }
         if value == binding && (globalMonitor != nil || hotkey != nil) { return nil }
         var candidate: EventHotKeyRef?
-        if value != "fn" {
+        if value.contains("key:") {
             let parts = value.split(separator: "+").map(String.init)
             guard let last = parts.last, last.hasPrefix("key:"), let code = UInt32(last.dropFirst(4)), code <= 127 else {
                 return "Unsupported key. Use fn or modifiers+key:code."
@@ -112,20 +112,26 @@ final class QuickEntry: NSObject {
         if let hotkey { UnregisterEventHotKey(hotkey) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
-        hotkey = candidate; globalMonitor = nil; localMonitor = nil; binding = value; tap = FnTap()
-        if value == "fn" {
+        hotkey = candidate; globalMonitor = nil; localMonitor = nil; binding = value; tap = ModifierTap(required: Self.mask(value))
+        if !value.contains("key:") {
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] in self?.event($0) }
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
                 self?.event(event); return event
             }
-            if !AXIsProcessTrusted() { return "Fn needs Accessibility access for this app, then reapply fn. Menu Quick Entry works meanwhile." }
+            if !AXIsProcessTrusted() { return "Modifier-only shortcuts need Accessibility access for this running app. Quick Entry in the menu works meanwhile." }
         }
         return nil
     }
+    static func mask(_ binding: String) -> UInt {
+        binding.split(separator: "+").reduce(0) { $0 | (["fn":UInt(1),"cmd":2,"shift":4,"ctrl":8,"alt":16][String($1)] ?? 0) }
+    }
     func event(_ event: NSEvent) {
         if event.type == .keyDown { tap.key(); return }
-        let other = !event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
-        if tap.flags(fn: event.modifierFlags.contains(.function), other: other) { show() }
+        var mask: UInt = 0
+        for (flag, bit): (NSEvent.ModifierFlags, UInt) in [(.function,1),(.command,2),(.shift,4),(.control,8),(.option,16)] {
+            if event.modifierFlags.contains(flag) { mask |= bit }
+        }
+        if tap.flags(mask) { show() }
     }
     func buildPanel() {
         panel = EntryPanel(contentRect: NSRect(x: 0, y: 0, width: 600, height: 208),

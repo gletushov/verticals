@@ -514,6 +514,11 @@ def main():
         gateway.daemon_threads = True
         threading.Thread(target=gateway.serve_forever, daemon=True).start()
         wait_healthy()
+        from quick_entry import QuickEntry
+        try:
+            QuickEntry(STATE, chat).onboard()
+        except (ChatError, OSError):
+            log("Quick Entry onboarding will retry on the next launch")
         write_mcp_config(cfg["token"])
         print(f"\nVerticals desktop is up\n  UI:  http://127.0.0.1:{UI_PORT}/\n  {mcp_instructions()}\n"
               f"Ctrl-C stops everything; data stays in {STATE}.\n", flush=True)
