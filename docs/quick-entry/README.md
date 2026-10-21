@@ -8,3 +8,5 @@ The three promotional screenshots render the actual Quick Entry page over a stag
 ![Capture](01-capture.png)
 ![Inbox](02-inbox.png)
 ![Agent](03-agent.png)
+
+The two short videos compare text feedback before and after the confirmation fade. The before clip disables the confirmation animation to reproduce the preceding implementation; the after clip uses the current page. The native bridge is stubbed and success is held for legibility. These clips show the text transition, not native panel dismissal or a backend transaction; native fade and reentry are measured by the smoke test.
