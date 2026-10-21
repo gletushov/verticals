@@ -256,7 +256,7 @@ def test_codex_is_given_its_conversation_in_the_environment_its_proxy_reads(tmp_
             pass
 
     chat_module.RpcProcess, chat_module.which = Rpc, lambda provider: "codex"
-    chat_module.codex_args = lambda chat, settings=None: ["codex", "app-server"]
+    chat_module.codex_args = lambda chat, settings=None, reads=None: ["codex", "app-server"]
     chat = chat_module.Chat(tmp_path, "http://127.0.0.1:8281/mcp", "tok")
     session = types.SimpleNamespace(id=SESSION, settings={}, emit=lambda event: None)
 

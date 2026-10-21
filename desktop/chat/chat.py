@@ -739,7 +739,7 @@ class CodexAgent:
         env = child_env({"VERTICALS_MCP_URL": chat.mcp_url, "VERTICALS_MCP_TOKEN": chat.token,
                          **({"VERTICALS_MCP_SESSION": conversation} if conversation else {})})
         reads = declared_reads(chat) if settings.get("sources") == CONNECTED else None
-        args = codex_args(chat, settings, reads=reads) if reads else codex_args(chat, settings)
+        args = codex_args(chat, settings, reads=reads) if reads is not None else codex_args(chat, settings)
         self.proc = RpcProcess(args, self.cwd, env, self.notify, self.request, self.exited)
         self.proc.request("initialize", {"clientInfo": {"name": "verticals-desktop", "title": "Verticals", "version": "0.1.0"},
                                          "capabilities": {"experimentalApi": True}})
