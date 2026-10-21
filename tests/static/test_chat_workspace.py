@@ -63,12 +63,21 @@ def test_report_agent_uses_the_private_workspace_and_preserves_code_selection(tm
     monkeypatch.setattr(module, 'which', lambda name: name)
     monkeypatch.setattr(module, 'JsonProcess', Process)
     monkeypatch.setattr(module, 'RpcProcess', Process)
-    monkeypatch.setattr(module, 'codex_args', lambda *args, **kwargs: ['codex', 'app-server'])
+    codex = tmp_path / 'codex'
+    codex.mkdir()
+    (codex / 'config.toml').write_text('')
+    monkeypatch.setenv('CODEX_HOME', str(codex))
+    checked = []
+    def run(argv, *, cwd, **kwargs):
+        checked.append(cwd)
+        return SimpleNamespace(returncode=0, stdout='[{"name":"verticals_desktop","enabled":true}]')
+    monkeypatch.setattr(module.subprocess, 'run', run)
     settings = module.clean_settings({'provider': provider, 'sources': 'connected'})
     session = SimpleNamespace(id=str(uuid.uuid4()), settings=settings, emit=lambda event: None)
     try:
         module.AGENT_CLASSES[provider](host, session, settings, None)
         assert calls == [state / 'chat-workspace']
+        assert checked == ([state / 'chat-workspace'] if provider == 'codex' else [])
         assert host.workdir == source, 'ordinary code work must retain the selected checkout'
     finally:
         host.shutdown()
