@@ -18,6 +18,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     var openMain: (() -> Void)?
     var previous: NSRunningApplication?
     var busy = false
+    var confirmation: UUID?
     var captureID = UUID().uuidString
     var captureText = ""
     var captureAction = ""
@@ -189,12 +190,13 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         else if (action == "agent" || action == "inbox"), let text = body["text"] as? String { send(action, text:text) }
     }
     func ui(_ error: String = "", clear: Bool = false) {
-        let args: [Any] = [busy,error,clear]
+        let args: [Any] = [busy,error,clear,captureAction]
         if let data = try? JSONSerialization.data(withJSONObject:args), let json = String(data:data,encoding:.utf8) {
             entryWeb.evaluateJavaScript("window.quickEntry?.state(..."+json+")", completionHandler:nil)
         }
     }
     @objc func show() {
+        if confirmation != nil { confirmation = nil; ui(clear:true) }
         loadIfNeeded()
         if !panel.isVisible { previous = NSWorkspace.shared.frontmostApplication; panel.center() }
         panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(entryWeb)
@@ -202,13 +204,29 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
     func close(cancel: Bool, restore: Bool = true) {
         guard !busy else { return }
+        confirmation = nil
         if cancel { captureID = UUID().uuidString; ui(clear:true) }
         panel.orderOut(nil)
         if restore { previous?.activate(options: []) }
     }
+    func acknowledge(_ action: String) {
+        let token = UUID()
+        confirmation = token
+        captureID = UUID().uuidString
+        // Confirmation stays in the same bubble; the completed action never waits for it.
+        if action == "inbox" { panel.resignKey(); previous?.activate(options:[]) }
+        let data = try! JSONSerialization.data(withJSONObject:[action])
+        let args = String(data:data,encoding:.utf8)!
+        entryWeb.evaluateJavaScript("window.quickEntry?.complete("+args+"[0])") { [weak self] _, _ in
+            DispatchQueue.main.asyncAfter(deadline:.now()+0.45) {
+                guard let self, self.confirmation == token else { return }
+                self.close(cancel:true,restore:false)
+            }
+        }
+    }
     func send(_ action: String, text raw: String) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !busy, !text.isEmpty else { return }
+        guard !busy, confirmation == nil, !text.isEmpty else { return }
         if text != captureText || action != captureAction {
             captureID = UUID().uuidString; captureText = text; captureAction = action
         }
@@ -244,8 +262,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
                     if let json = try? JSONSerialization.data(withJSONObject: event), let value = String(data: json, encoding: .utf8) {
                         self.mainWeb.evaluateJavaScript("window.dispatchEvent(new CustomEvent('verticals-quick-entry', {detail: \(value)}))", completionHandler: nil)
                     }
-                    self.ui(clear:true); self.captureID = UUID().uuidString; self.close(cancel: false, restore:action == "inbox")
-                    if action == "agent" { self.openMain?() }
+                    self.acknowledge(action)
                 }
             }.resume()
         }

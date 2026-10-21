@@ -13,7 +13,7 @@ with sync_playwright() as p:
     field.fill('Заметка')
     field.press('Enter')
     assert page.evaluate("messages.filter(m=>m.action==='inbox').length")==1
-    assert page.get_by_role('status').inner_text()=='Sending…'
+    assert page.get_by_role('status').inner_text()=='Adding to Inbox…'
     page.evaluate("window.quickEntry.state(false, '')")
     field.fill('Поручение')
     field.press('Meta+Enter')

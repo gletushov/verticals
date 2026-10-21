@@ -45,7 +45,7 @@ import WebKit
     func settled() async throws {
         try await Task.sleep(nanoseconds:500_000_000)
         for _ in 0..<300 {
-            if !entry.busy { return }
+            if !entry.busy && entry.confirmation == nil { return }
             try await Task.sleep(nanoseconds:100_000_000)
         }
         throw NSError(domain:"Native request timed out",code:2)
@@ -83,9 +83,21 @@ import WebKit
         try await Task.sleep(nanoseconds:300_000_000)
         try await picture(entry.entryWeb,"native-bubble")
         key(36)
+        try await wait(entry.entryWeb,"document.querySelector('[role=status]').textContent === 'Added to Inbox'")
+        assert(entry.panel.isVisible,"Success acknowledgement must be visible")
+        try await picture(entry.entryWeb,"native-feedback-inbox")
         try await settled()
         assert(!entry.panel.isVisible,"Enter must save and close")
         print("Native Enter saved and closed")
+        entry.show()
+        entry.acknowledge("inbox")
+        entry.show()
+        try await type("Keep the next thought")
+        try await Task.sleep(nanoseconds:650_000_000)
+        assert(entry.panel.isVisible,"Previous confirmation must not close a reopened capture")
+        let next = try await js(entry.entryWeb,"document.querySelector('textarea').value") as? String
+        assert(next == "Keep the next thought")
+        print("Reopening cancels delayed close and preserves the next thought")
         entry.show()
         try await type("Отмена")
         key(53)
