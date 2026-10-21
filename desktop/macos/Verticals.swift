@@ -229,6 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func showUI() {
+        quickEntry?.loadIfNeeded()
         serving = true
         tray.button?.appearsDisabled = false
         status.isHidden = true

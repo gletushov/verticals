@@ -6,12 +6,15 @@ final class EntryPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
-final class QuickEntry: NSObject, WKScriptMessageHandler {
+final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let state: URL
     let base: URL
     let mainWeb: WKWebView
     var panel: EntryPanel!
     var entryWeb: WKWebView!
+    var loaded = false
+    var loading = false
+    let loadingLabel = NSTextField(labelWithString: "Starting Quick Entry…")
     var openMain: (() -> Void)?
     var previous: NSRunningApplication?
     var busy = false
@@ -57,7 +60,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
     func status(request: String, error: String?) {
         write("quick-entry-status.json", ["request": request, "binding": binding,
               "registered": hotkey != nil || globalMonitor != nil, "applied": error == nil, "error": error ?? "",
-              "accessibility": AXIsProcessTrusted(), "app_path": Bundle.main.bundlePath, "pid": ProcessInfo.processInfo.processIdentifier])
+              "ui_ready": loaded, "accessibility": AXIsProcessTrusted(), "app_path": Bundle.main.bundlePath, "pid": ProcessInfo.processInfo.processIdentifier])
     }
     func poll() {
         if !binding.contains("key:") && globalMonitor != nil && !AXIsProcessTrusted() {
@@ -136,9 +139,46 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
         entryWeb = WKWebView(frame: NSRect(x:0,y:0,width:600,height:84), configuration:config)
         entryWeb.setValue(false, forKey:"drawsBackground")
         entryWeb.autoresizingMask = [.width, .height]
-        panel.contentView = entryWeb
-        entryWeb.load(URLRequest(url:base.appendingPathComponent("quick-entry.html"), cachePolicy:.reloadIgnoringLocalCacheData))
+        entryWeb.navigationDelegate = self
+        entryWeb.isHidden = true
+        let content = NSView(frame:entryWeb.frame)
+        content.wantsLayer = true
+        content.layer?.backgroundColor = NSColor.black.cgColor
+        content.layer?.cornerRadius = 42
+        loadingLabel.frame = NSRect(x:32,y:24,width:536,height:36)
+        loadingLabel.font = .systemFont(ofSize:28)
+        loadingLabel.textColor = .white
+        content.addSubview(loadingLabel)
+        content.addSubview(entryWeb)
+        panel.contentView = content
     }
+    func loadIfNeeded() {
+        guard !loaded, !loading else { return }
+        loading = true
+        entryWeb.load(URLRequest(url:base.appendingPathComponent("quick-entry.html"),cachePolicy:.reloadIgnoringLocalCacheData))
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        loaded = true; loading = false
+        if var report = read("quick-entry-status.json") {
+            report["ui_ready"] = true
+            write("quick-entry-status.json",report)
+        }
+        loadingLabel.isHidden = true; entryWeb.isHidden = false
+        panel.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+        if panel.isVisible {
+            panel.makeFirstResponder(entryWeb)
+            entryWeb.evaluateJavaScript("window.quickEntry?.focus()",completionHandler:nil)
+        }
+    }
+    func retryLoad() {
+        loading = false
+        guard panel.isVisible else { return }
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.5) { [weak self] in
+            if self?.panel.isVisible == true { self?.loadIfNeeded() }
+        }
+    }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { retryLoad() }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { retryLoad() }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
         if action == "resize", let height = body["height"] as? Double {
@@ -155,6 +195,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
         }
     }
     @objc func show() {
+        loadIfNeeded()
         if !panel.isVisible { previous = NSWorkspace.shared.frontmostApplication; panel.center() }
         panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(entryWeb)
         entryWeb.evaluateJavaScript("window.quickEntry?.focus()",completionHandler:nil)

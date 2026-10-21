@@ -92,6 +92,7 @@ import WebKit
         try await Task.sleep(nanoseconds:200_000_000)
         assert(!entry.panel.isVisible,"Escape must close")
         print("Native Escape closed")
+        if !CommandLine.arguments.contains("--input-only") {
         entry.show()
         try await type("Ответь только QUICK_BUBBLE_OK. Ничего не изменяй.")
         key(36,.command)
@@ -101,11 +102,12 @@ import WebKit
         print("Agent opened task:",try await js(web,"location.hash"))
         try await Task.sleep(nanoseconds:2_000_000_000)
         try await picture(web,"native-agent-task")
+        }
         // Actual network failure, not a mocked response.
         entry=QuickEntry(state:output,base:URL(string:"http://127.0.0.1:1/")!,web:web)
         entry.entryWeb.load(URLRequest(url:URL(string:"http://127.0.0.1:8388/quick-entry.html")!))
-        entry.show()
         try await wait(entry.entryWeb,"!!window.quickEntry")
+        entry.show()
         try await type("Текст остаётся при ошибке")
         key(36)
         try await settled()
