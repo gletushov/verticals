@@ -13,3 +13,5 @@ On macOS, start the isolated desktop gateway on 8388, then compile `QuickEntry.s
 Run `python tests/quick_entry/bubble_check.py` against the isolated gateway to check both keyboard actions, Shift+Enter, long input, retained text after failure, and the absence of buttons in WebKit. It records the native bridge; native_smoke covers the real bridge and API.
 
 For the native partial-failure focus check, run `python tests/quick_entry/partial_gateway.py <existing-test-goal-id>`, then `/tmp/quick-bubble-smoke --partial`. The fixture returns a saved goal and a launch failure; it does not emulate successful agent execution. Stop the fixture afterwards.
+
+Compile `native_access.swift` with QuickEntry and QuickEntryKeys to verify Carbon fallback registration, hotkey dispatch and rebinding. Run it while the test app is closed to avoid competing for its shortcut. The installed app status separately reports preferred and fallback registration.

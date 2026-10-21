@@ -78,10 +78,14 @@ class CaptureTests(unittest.TestCase):
         method,path,payload,options=self.chat.created[0]
         self.assertEqual((method,path),('POST','/api/goals'))
         self.assertIn('⌘⇧',payload['body'])
-        self.assertIn('Универсальный доступ',payload['body'])
-        self.assertIn('агент',payload['body'])
+        self.assertIn('Accessibility',payload['body'])
+        self.assertIn('agent',payload['body'])
         self.assertEqual(options['idempotency_key'],'quick-entry-onboarding-v1')
         self.assertNotIn('vertical',payload)
+    def test_startup_never_prompts_for_accessibility(self):
+        # A startup must not call the prompting API, even when a build's identity changes.
+        native=(Path(__file__).parents[2]/'desktop/macos/QuickEntry.swift').read_text()
+        self.assertNotIn('AXIsProcessTrustedWithOptions',native)
     def test_long_text_keeps_full_body(self):
         words='Длинная мысль '*40
         self.q.capture({'request':'long','action':'inbox','text':words})

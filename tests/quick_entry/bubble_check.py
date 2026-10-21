@@ -7,10 +7,13 @@ with sync_playwright() as p:
     page=browser.new_page(viewport={"width":600,"height":320})
     page.add_init_script("window.messages=[];window.webkit={messageHandlers:{quickEntry:{postMessage:m=>window.messages.push(m)}}}")
     page.goto('http://127.0.0.1:8388/quick-entry.html')
-    field=page.get_by_role('textbox',name='Быстрый ввод')
+    field=page.get_by_role('textbox',name='Quick Entry')
+    assert field.get_attribute('placeholder')=='Write a thought'
+    assert page.locator('html').get_attribute('lang')=='en'
     field.fill('Заметка')
     field.press('Enter')
     assert page.evaluate("messages.filter(m=>m.action==='inbox').length")==1
+    assert page.get_by_role('status').inner_text()=='Sending…'
     page.evaluate("window.quickEntry.state(false, '')")
     field.fill('Поручение')
     field.press('Meta+Enter')

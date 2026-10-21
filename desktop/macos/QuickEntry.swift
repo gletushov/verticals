@@ -20,6 +20,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
     var captureAction = ""
     var binding = "cmd+shift"
     var hotkey: EventHotKeyRef?
+    var fallbackHotkey: EventHotKeyRef?
     var handler: EventHandlerRef?
     var globalMonitor: Any?
     var localMonitor: Any?
@@ -38,9 +39,8 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
             entry.show(); return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
         let saved = read("quick-entry-binding.json")?["binding"] as? String ?? "cmd+shift"
-        if !saved.contains("key:") && !AXIsProcessTrusted() {
-            _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        }
+        binding = saved
+        if !saved.contains("key:") { enableFallback() }
         let error = register(saved)
         status(request: "", error: error)
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in self?.poll() }
@@ -56,12 +56,27 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
             try? data.write(to: state.appendingPathComponent(name), options: .atomic)
         }
     }
+    func enableFallback() {
+        guard fallbackHotkey == nil else { return }
+        // Carbon registers this exact chord without monitoring other keyboard input.
+        _ = RegisterEventHotKey(49, UInt32(cmdKey | shiftKey), EventHotKeyID(signature:0x56545145,id:2),
+                               GetApplicationEventTarget(),0,&fallbackHotkey)
+    }
     func status(request: String, error: String?) {
         write("quick-entry-status.json", ["request": request, "binding": binding,
               "registered": hotkey != nil || globalMonitor != nil, "applied": error == nil, "error": error ?? "",
+              "fallback_binding": "cmd+shift+key:49", "fallback_registered": fallbackHotkey != nil,
+              "effective_binding": (hotkey != nil || globalMonitor != nil) ? binding : (fallbackHotkey != nil ? "cmd+shift+key:49" : ""),
               "accessibility": AXIsProcessTrusted(), "app_path": Bundle.main.bundlePath, "pid": ProcessInfo.processInfo.processIdentifier])
     }
     func poll() {
+        if !binding.contains("key:") && globalMonitor != nil && !AXIsProcessTrusted() {
+            if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+            if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+            globalMonitor = nil; localMonitor = nil
+            enableFallback()
+            status(request:lastRequest,error:"Accessibility is unavailable. Use Command+Shift+Space or the Quick Entry menu.")
+        }
         if !binding.contains("key:") && globalMonitor == nil && AXIsProcessTrusted() {
             status(request: lastRequest, error: register(binding))
         }
@@ -74,7 +89,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
     }
     func register(_ value: String) -> String? {
         if !value.contains("key:") && !AXIsProcessTrusted() {
-            return "Modifier-only shortcuts need Accessibility access for this running app. Quick Entry in the menu works meanwhile."
+            return "Command+Shift alone needs Accessibility access for this app. Use Command+Shift+Space or the Quick Entry menu."
         }
         if value == binding && (globalMonitor != nil || hotkey != nil) { return nil }
         var candidate: EventHotKeyRef?
@@ -93,11 +108,16 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
                 default: return "Unsupported modifier"
                 }
             }
-            let result = RegisterEventHotKey(code, mods, EventHotKeyID(signature: 0x56545145, id: 1),
+            if code == 49 && mods == UInt32(cmdKey | shiftKey), let fallbackHotkey {
+                candidate = fallbackHotkey; self.fallbackHotkey = nil
+            }
+            let result = candidate != nil ? noErr : RegisterEventHotKey(code, mods, EventHotKeyID(signature: 0x56545145, id: 1),
                                              GetApplicationEventTarget(), 0, &candidate)
             guard result == noErr else { return "Key registration failed (\(result)); previous binding kept." }
         }
         if let hotkey { UnregisterEventHotKey(hotkey) }
+        if value.contains("key:"), let fallbackHotkey { UnregisterEventHotKey(fallbackHotkey); self.fallbackHotkey = nil }
+        if !value.contains("key:") { enableFallback() }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         hotkey = candidate; globalMonitor = nil; localMonitor = nil; binding = value; tap = ModifierTap(required: Self.mask(value))
@@ -106,7 +126,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
                 self?.event(event); return event
             }
-            if !AXIsProcessTrusted() { return "Modifier-only shortcuts need Accessibility access for this running app. Quick Entry in the menu works meanwhile." }
+            if !AXIsProcessTrusted() { return "Command+Shift alone needs Accessibility access for this app. Use Command+Shift+Space or the Quick Entry menu." }
         }
         return nil
     }
@@ -180,7 +200,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
                 DispatchQueue.main.async {
                     self.busy = false
                     guard (response as? HTTPURLResponse)?.statusCode == 200, error == nil else {
-                        self.ui(result["error"] as? String ?? "Не удалось отправить. Текст сохранён — попробуйте ещё раз.")
+                        self.ui(result["error"] as? String ?? "Could not send. Your text is saved — try again.")
                         return
                     }
                     if action == "agent", let goal = result["goal"] as? String {
@@ -191,7 +211,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler {
                         self.openMain?()
                     }
                     if let error = result["error"] as? String {
-                        self.ui("Задача сохранена. " + error + " Повтори ⌘Enter для запуска агента.")
+                        self.ui("Task saved. " + error + " Press ⌘Enter to retry the agent.")
                         self.show()
                         return
                     }

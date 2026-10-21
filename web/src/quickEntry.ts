@@ -26,7 +26,7 @@ host.quickEntry = {
   state(working, error, clear = false) {
     busy = working
     field.readOnly = working
-    status.textContent = error || (working ? 'Отправляем…' : '')
+    status.textContent = error || (working ? 'Sending…' : '')
     if (clear) field.value = ''
     resize()
     if (!working) field.focus()

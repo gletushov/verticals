@@ -48,9 +48,9 @@ class QuickEntry:
     def onboard(self):
         marker = self.state / 'quick-entry-onboarding.json'
         if marker.exists(): return
-        body = 'Нажми и отпусти ⌘⇧ (Command + Shift) без других клавиш — откроется быстрый ввод. Enter сохраняет мысль в Inbox; ⌘Enter создаёт задачу, открывает её в Verticals и запускает агента.\n\nОткрой Системные настройки → Конфиденциальность и безопасность → Универсальный доступ и разреши запущенной копии Verticals работать с клавиатурой.\n\nХочешь другое сочетание или ввод не работает? Нажми «Discuss with agent» в этой задаче и скажи агенту. После пробы задачу можно завершить — снова она не появится.'
+        body = 'Press ⌘⇧Space to open Quick Entry from any app. Enter saves to Inbox; ⌘Enter creates a task, opens it in Verticals and starts the agent.\n\nFor ⌘⇧ without Space, allow this copy of Verticals in System Settings → Privacy & Security → Accessibility. The app will not prompt you repeatedly.\n\nTo change the shortcut, choose “Discuss with agent” in this task and ask the agent. Complete this task after trying Quick Entry; it will not appear again.'
         result = self.chat.api('POST','/api/goals',
-            {'title':'Попробовать быстрый ввод', 'body':body},
+            {'title':'Try Quick Entry', 'body':body},
             idempotency_key='quick-entry-onboarding-v1')
         write(marker, {'goal':result['id']})
 
