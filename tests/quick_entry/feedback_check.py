@@ -16,6 +16,11 @@ with sync_playwright() as p:
  assert 'Added to Inbox' not in page.locator('body').inner_text()
  assert page.locator('.circle-field__pivot, .circle-field__line').count()==0,'Feedback must be text only'
  page.evaluate("window.quickEntry.complete('inbox')")
+ opacity=page.get_by_role('status').evaluate('(e)=>getComputedStyle(e).opacity')
+ assert float(opacity)<1,'Confirmation should appear gradually'
+ page.wait_for_timeout(140)
+ assert page.get_by_role('status').evaluate('(e)=>getComputedStyle(e).opacity')=='1'
+
  assert page.get_by_role('status').inner_text()=='Added to Inbox'
  assert page.locator('.quick-entry').bounding_box()['height']==before
  page.screenshot(path='/tmp/quick-entry-evidence/feedback-inbox.png')
@@ -32,6 +37,8 @@ with sync_playwright() as p:
  page.screenshot(path='/tmp/quick-entry-evidence/feedback-error.png')
  page.emulate_media(reduced_motion='reduce')
  f.press('Enter')
+ page.evaluate("window.quickEntry.complete('inbox')")
+ assert page.get_by_role('status').evaluate('(e)=>getComputedStyle(e).animationName')=='none'
  assert page.locator('.circle-field__pivot, .circle-field__line').count()==0
  b.close()
 print('No strip or resize; text-only progress, success, error retention and reduced motion passed')

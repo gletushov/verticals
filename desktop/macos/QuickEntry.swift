@@ -1,6 +1,7 @@
 import Cocoa
 import Carbon
 import WebKit
+import QuartzCore
 
 final class EntryPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -160,6 +161,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded = true; loading = false
+        syncMotion()
         if var report = read("quick-entry-status.json") {
             report["ui_ready"] = true
             write("quick-entry-status.json",report)
@@ -195,8 +197,21 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             entryWeb.evaluateJavaScript("window.quickEntry?.state(..."+json+")", completionHandler:nil)
         }
     }
+    func syncMotion() {
+        let script: String
+        if let choice = UserDefaults.standard.object(forKey:"ReduceMotion") as? Bool {
+            script = "document.documentElement.setAttribute('data-reduce-motion','" + (choice ? "on" : "off") + "')"
+        } else {
+            script = "document.documentElement.removeAttribute('data-reduce-motion')"
+        }
+        entryWeb.evaluateJavaScript(script,completionHandler:nil)
+    }
     @objc func show() {
         if confirmation != nil { confirmation = nil; ui(clear:true) }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            panel.animator().alphaValue = 1
+        }
         loadIfNeeded()
         if !panel.isVisible { previous = NSWorkspace.shared.frontmostApplication; panel.center() }
         panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(entryWeb)
@@ -207,9 +222,25 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         confirmation = nil
         if cancel { captureID = UUID().uuidString; ui(clear:true) }
         panel.orderOut(nil)
+        panel.alphaValue = 1
         if restore { previous?.activate(options: []) }
     }
+    func fadeConfirmation(_ token: UUID) {
+        guard confirmation == token else { return }
+        let reduced = UserDefaults.standard.object(forKey:"ReduceMotion") as? Bool
+            ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if reduced { close(cancel:true,restore:false); return }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name:.easeOut)
+            panel.animator().alphaValue = 0
+        }, completionHandler:{ [weak self] in
+            guard let self, self.confirmation == token else { return }
+            self.close(cancel:true,restore:false)
+        })
+    }
     func acknowledge(_ action: String) {
+        syncMotion()
         let token = UUID()
         confirmation = token
         captureID = UUID().uuidString
@@ -220,7 +251,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         entryWeb.evaluateJavaScript("window.quickEntry?.complete("+args+"[0])") { [weak self] _, _ in
             DispatchQueue.main.asyncAfter(deadline:.now()+0.20) {
                 guard let self, self.confirmation == token else { return }
-                self.close(cancel:true,restore:false)
+                self.fadeConfirmation(token)
             }
         }
     }
