@@ -221,6 +221,8 @@ def framable(url):
 
 
 def make_gateway(token, chat):
+    from quick_entry import QuickEntry
+    quick_entry = QuickEntry(STATE, chat)
     class Gateway(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -303,6 +305,10 @@ def make_gateway(token, chat):
                 return self.static(asset)
             if not self.allowed():
                 return
+            if self.command == "GET" and path == "/__chat/quick-entry-sessions":
+                return self.send_json({"threads": quick_entry.conversations()})
+            if self.command == "GET" and path == "/__chat/quick-entry-binding":
+                return self.send_json(quick_entry.binding())
             if self.command == "GET" and path == "/__chat/events":
                 return self.chat_events()
             if self.command == "GET" and path == "/__chat/agents":
@@ -327,6 +333,10 @@ def make_gateway(token, chat):
             try:
                 body = self.json_body()
                 action = path.removeprefix("/__chat/")
+                if action == "quick-entry-binding":
+                    return self.send_json(quick_entry.binding(body.get("binding")))
+                if action == "quick-entry":
+                    return self.send_json(quick_entry.capture(body))
                 if action == "send":
                     chat.send(body.get("session"), body.get("text"), body.get("context"), body.get("settings"),
                               "now" if body.get("mode") == "now" else "send")

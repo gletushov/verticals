@@ -299,3 +299,13 @@ MVP. Codex support follows the `app-server` protocol. Verified with Codex CLI
 and a read-only board query returning sample goals through the local MCP relay. This checks
 the backend flow; it does not establish every provider/model or packaged-app combination.
 No Developer ID signing or notarization yet.
+
+## Quick Entry
+
+Tap Fn by itself to open a small black field above another application. Fn used with another key does not open it. Save to Inbox (⌘Return) saves an undated note and returns focus; Send to agent starts a separate background conversation, available in the normal conversation list. Escape discards input. Failed submissions keep the text.
+
+The native app needs macOS Accessibility access for global Fn observation. The tray's Quick Entry command is also available. The macOS action assigned to Fn/Globe is not silently changed; check it on the owner's keyboard.
+
+Ask the agent to change the binding using `quick_entry_binding`; no binding settings are shown in the UI. Read with no arguments, or set `binding` to `fn`, `key:49` (Space), or a macOS virtual key code prefixed with `ctrl+`, `alt+`, `shift+`, `cmd+`. Native registration is acknowledged, persisted, and the previous binding is retained on failure. Registration cannot prove that no other app also observes the gesture.
+
+For an isolated native test copy, give it its own bundle identifier and set its defaults `StateDir`, `UIPort`, `APIPort`, `MCPPort`, and `PGPort`; the native launcher forwards the ports to its bundled backend. Point `ReleasesAPI` at an inert local URL to keep test copies out of release updates.
