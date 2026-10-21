@@ -30,7 +30,7 @@ class QuickEntry:
         with self.lock:
             status = self.state / 'quick-entry-status.json'
             if value is None:
-                return read(status, {'binding': 'cmd+shift', 'registered': False, 'error': 'Native app has not registered the key yet'})
+                return read(status, {'binding': 'cmd+shift+key:49', 'registered': False, 'error': 'Native app has not registered the key yet'})
             if not isinstance(value, str) or not re.fullmatch(r'fn|(?:ctrl|alt|cmd|shift)(?:\+(?:ctrl|alt|cmd|shift))*|(?:(?:ctrl|alt|cmd|shift)\+)*key:[0-9]{1,3}', value):
                 raise ValueError('Use fn, cmd+shift, or modifiers + a macOS key code, e.g. ctrl+alt+key:49 (Space).')
             if 'key:' in value and int(value.rsplit(':',1)[1]) > 127:
@@ -48,7 +48,7 @@ class QuickEntry:
     def onboard(self):
         marker = self.state / 'quick-entry-onboarding.json'
         if marker.exists(): return
-        body = 'Press ⌘⇧Space to open Quick Entry from any app. Enter saves to Inbox; ⌘Enter creates a task, opens it in Verticals and starts the agent.\n\nFor ⌘⇧ without Space, allow this copy of Verticals in System Settings → Privacy & Security → Accessibility. The app will not prompt you repeatedly.\n\nTo change the shortcut, choose “Discuss with agent” in this task and ask the agent. Complete this task after trying Quick Entry; it will not appear again.'
+        body = 'Press ⌘⇧Space to open Quick Entry from any app. Enter saves to Inbox; ⌘Enter creates a task, opens it in Verticals and starts the agent.\n\nThis shortcut works without Accessibility permission.\n\nTo change the shortcut, choose “Discuss with agent” in this task and ask the agent. Complete this task after trying Quick Entry; it will not appear again.'
         result = self.chat.api('POST','/api/goals',
             {'title':'Try Quick Entry', 'body':body},
             idempotency_key='quick-entry-onboarding-v1')

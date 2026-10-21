@@ -6,7 +6,7 @@ from verticals.mcp.shapes import ok, error_result
 
 TOOLS = (types.Tool(name='quick_entry_binding', description=(
     'Read or change the global Quick Entry key of the desktop app. Omit binding to read. '
-    'Default is cmd+shift (press and release both alone). fn is also supported. For a key use macOS virtual key code: key:49 is Space; '
+    'Default is cmd+shift+key:49 (Command+Shift+Space), without Accessibility permission. Modifier-only shortcuts such as fn require Accessibility. For a key use macOS virtual key code: key:49 is Space; '
     'prefix modifiers ctrl+, alt+, shift+, cmd+ as needed. No settings UI. '
     'A native registration result is not proof that another app will not also act: test a real key press. '
     'On a registration failure the previous binding stays active.'), input_schema={

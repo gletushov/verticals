@@ -302,12 +302,12 @@ No Developer ID signing or notarization yet.
 
 ## Quick Entry
 
-Press and release Command+Shift by themselves to open a small black field above another application. The modifiers used with another key do not open it. The bubble shares SearchBar’s CSS and Commissioner font. Return saves an undated Inbox task and returns focus; ⌘Return creates a task, opens it in the same app and starts a linked agent conversation. Shift+Return adds a line. There are no action buttons. Escape discards input. Failed submissions keep the text.
+Press Command+Shift+Space to open a small black field above another application. The bubble shares SearchBar’s CSS and Commissioner font. Return saves an undated Inbox task and returns focus; ⌘Return creates a task, opens it in the same app and starts a linked agent conversation. Shift+Return adds a line. There are no action buttons. Escape discards input. Failed submissions keep the text.
 
-The native app needs macOS Accessibility access for global modifier-only shortcuts. It never prompts automatically. Command+Shift+Space is also registered through Carbon while a modifier-only binding is configured, so Quick Entry remains usable without Accessibility. If registration conflicts, the status reports fallback_registered=false and the menu remains available. The tray's Quick Entry command is also available. The macOS action assigned to Fn/Globe is not silently changed; check it on the owner's keyboard.
+Command+Shift+Space is the only default shortcut and uses Carbon without Accessibility permission. The tray’s Quick Entry command is also available. A custom modifier-only binding requires Accessibility; the app never prompts automatically.
 
-Ask the agent to change the binding using `quick_entry_binding`; no binding settings are shown in the UI. Read with no arguments, or set `binding` to `cmd+shift`, `fn`, `key:49` (Space), or a macOS virtual key code prefixed with `ctrl+`, `alt+`, `shift+`, `cmd+`. Native registration is acknowledged, persisted, and the previous binding is retained on failure. Registration cannot prove that no other app also observes the gesture.
+Ask the agent to change the binding using `quick_entry_binding`; no binding settings are shown in the UI. Read with no arguments, or set `binding` to `cmd+shift+key:49`, `fn`, `key:49` (Space), or a macOS virtual key code prefixed with `ctrl+`, `alt+`, `shift+`, `cmd+`. Native registration is acknowledged, persisted, and the previous binding is retained on failure. Registration cannot prove that no other app also observes the gesture.
 
 For an isolated native test copy, give it its own bundle identifier and set its defaults `StateDir`, `UIPort`, `APIPort`, `MCPPort`, and `PGPort`; the native launcher forwards the ports to its bundled backend. Point `ReleasesAPI` at an inert local URL to keep test copies out of release updates.
 
-On first launch, a single Inbox task explains Quick Entry, Accessibility access and changing the binding through the agent in that task. A saved marker keeps completed or deleted onboarding from returning.
+On first launch, a single Inbox task explains Quick Entry and changing the binding through the agent in that task. A saved marker keeps completed or deleted onboarding from returning.
