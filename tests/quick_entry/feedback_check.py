@@ -14,11 +14,7 @@ with sync_playwright() as p:
  assert after==before, f'Sending must not add a strip: {before} -> {after}'
  assert page.get_by_role('status').inner_text()=='Adding to Inbox…'
  assert 'Added to Inbox' not in page.locator('body').inner_text()
- page.wait_for_timeout(180)
- a=page.locator('.circle-field__pivot').evaluate('(e)=>getComputedStyle(e).transform')
- page.wait_for_timeout(180)
- z=page.locator('.circle-field__pivot').evaluate('(e)=>getComputedStyle(e).transform')
- assert a!=z,'The existing Verticals line should turn while working'
+ assert page.locator('.circle-field__pivot, .circle-field__line').count()==0,'Feedback must be text only'
  page.evaluate("window.quickEntry.complete('inbox')")
  assert page.get_by_role('status').inner_text()=='Added to Inbox'
  assert page.locator('.quick-entry').bounding_box()['height']==before
@@ -36,6 +32,6 @@ with sync_playwright() as p:
  page.screenshot(path='/tmp/quick-entry-evidence/feedback-error.png')
  page.emulate_media(reduced_motion='reduce')
  f.press('Enter')
- assert page.locator('.circle-field__pivot').evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+ assert page.locator('.circle-field__pivot, .circle-field__line').count()==0
  b.close()
-print('No strip or resize; real progress motion, success, error retention and reduced motion passed')
+print('No strip or resize; text-only progress, success, error retention and reduced motion passed')

@@ -91,12 +91,14 @@ import WebKit
         print("Native Enter saved and closed")
         entry.show()
         entry.acknowledge("inbox")
+        try await wait(entry.entryWeb,"document.querySelector('[role=status]').textContent === 'Added to Inbox'")
         entry.show()
+        try await wait(entry.entryWeb,"!document.querySelector('textarea').readOnly && document.querySelector('[role=status]').textContent === ''")
         try await type("Keep the next thought")
         try await Task.sleep(nanoseconds:650_000_000)
         assert(entry.panel.isVisible,"Previous confirmation must not close a reopened capture")
         let next = try await js(entry.entryWeb,"document.querySelector('textarea').value") as? String
-        assert(next == "Keep the next thought")
+        assert(next == "Keep the next thought","New capture changed: \(String(describing:next))")
         print("Reopening cancels delayed close and preserves the next thought")
         entry.show()
         try await type("Отмена")
@@ -117,6 +119,7 @@ import WebKit
         }
         // Actual network failure, not a mocked response.
         entry=QuickEntry(state:output,base:URL(string:"http://127.0.0.1:1/")!,web:web)
+        entry.loading = true // This fixture loads UI from the live server but sends to a closed port.
         entry.entryWeb.load(URLRequest(url:URL(string:"http://127.0.0.1:8388/quick-entry.html")!))
         try await wait(entry.entryWeb,"!!window.quickEntry")
         entry.show()

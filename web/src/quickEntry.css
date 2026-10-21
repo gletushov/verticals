@@ -7,12 +7,7 @@ html, body { background: transparent !important; margin: 0; overflow: hidden; }
 
 .quick-entry__feedback { position: absolute; inset: 24px 32px; display: none; align-items: center; gap: 20px; color: #fff; }
 .quick-entry__status { margin: 0; font: 400 28px/36px var(--font-body); overflow-wrap: anywhere; }
-.quick-entry__mark { position: relative; flex: 0 0 24px; height: 36px; }
 .quick-entry:is([data-phase='working'], [data-phase='success']) .quick-entry__feedback { display: flex; }
 .quick-entry:is([data-phase='working'], [data-phase='success']) .circle-field__words { opacity: 0; pointer-events: none; }
 .quick-entry[data-phase='error'] .quick-entry__feedback { display: block; inset: auto 32px 16px; }
 .quick-entry[data-phase='error'] .quick-entry__status { font: 400 14px/20px var(--font-body); }
-.quick-entry[data-phase='error'] .quick-entry__mark { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .quick-entry .circle-field__pivot.is-turning { animation: none; }
-}

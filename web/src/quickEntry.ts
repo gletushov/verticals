@@ -15,7 +15,6 @@ const shape = document.querySelector<HTMLElement>('.circle-field__shape')!
 const status = document.querySelector<HTMLElement>('[role=status]')!
 const bubble = document.querySelector<HTMLElement>('.quick-entry')!
 const words = document.querySelector<HTMLElement>('.circle-field__words')!
-const pivot = document.querySelector<HTMLElement>('.circle-field__pivot')!
 let phase = 'typing'
 let action = 'inbox'
 let busy = false
@@ -34,7 +33,6 @@ host.quickEntry = {
     if (selectedAction) action = selectedAction
     phase = error ? 'error' : working ? 'working' : 'typing'
     bubble.dataset.phase = phase
-    pivot.classList.toggle('is-turning', working)
     busy = working
     field.readOnly = working
     status.textContent = error || (working ? (action === 'agent' ? 'Starting agent…' : 'Adding to Inbox…') : '')
@@ -47,7 +45,6 @@ host.quickEntry = {
     field.readOnly = true
     phase = 'success'
     bubble.dataset.phase = phase
-    pivot.classList.remove('is-turning')
     status.textContent = selectedAction === 'agent' ? 'Sent to agent' : 'Added to Inbox'
     resize()
   },

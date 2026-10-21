@@ -218,7 +218,7 @@ final class QuickEntry: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let data = try! JSONSerialization.data(withJSONObject:[action])
         let args = String(data:data,encoding:.utf8)!
         entryWeb.evaluateJavaScript("window.quickEntry?.complete("+args+"[0])") { [weak self] _, _ in
-            DispatchQueue.main.asyncAfter(deadline:.now()+0.45) {
+            DispatchQueue.main.asyncAfter(deadline:.now()+0.20) {
                 guard let self, self.confirmation == token else { return }
                 self.close(cancel:true,restore:false)
             }

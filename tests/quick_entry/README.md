@@ -16,4 +16,4 @@ For the native partial-failure focus check, run `python tests/quick_entry/partia
 
 Compile `native_access.swift` with QuickEntry and QuickEntryKeys to verify single default Carbon registration, hotkey dispatch and rebinding. Run it while the test app is closed to avoid competing for its shortcut. The default must not install modifier-only event monitors.
 
-Run feedback_check.py against the isolated app to verify stable height during send, the existing line animation over time, success labels, error text retention and reduced motion. Native smoke additionally checks the visible acknowledgement and that a delayed close cannot dismiss a new capture opened during confirmation.
+Run feedback_check.py against the isolated app to verify stable height during send, text-only feedback without a line, success labels, error text retention and reduced motion. Native smoke additionally checks the visible acknowledgement and that a delayed close cannot dismiss a new capture opened during confirmation.
