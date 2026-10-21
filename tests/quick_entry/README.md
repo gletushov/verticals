@@ -8,4 +8,8 @@ The Python checks use a temporary state folder. A recording Chat boundary checks
 
 Before implementation the gesture check failed at “Fn alone must open after release”; after implementation it checks isolated Fn, other keys and modifiers, release order, and duplicate events.
 
-On macOS, start the isolated desktop gateway on 8388, then compile `QuickEntry.swift`, `QuickEntryKeys.swift`, and `native_smoke.swift` together. This opens a real AppKit panel, sends Cmd+Return through its text view, checks Escape, and forces a network error. It writes two PNGs to `/tmp/quick-entry-evidence`. It creates one synthetic Inbox note in that gateway. It does not test a physical Fn press or Spaces; those need native permissions and owner acceptance.
+On macOS, start the isolated desktop gateway on 8388, then compile `QuickEntry.swift`, `QuickEntryKeys.swift`, and `native_smoke.swift` together. This opens a real AppKit panel, sends Return and Cmd+Return through its WKWebView, checks Escape, opens a task with a real Codex session, and forces a network error. It writes PNGs to `/tmp/quick-entry-evidence`. It creates synthetic Inbox tasks in that gateway. It does not test a physical Fn press or Spaces; those need native permissions and owner acceptance.
+
+Run `python tests/quick_entry/bubble_check.py` against the isolated gateway to check both keyboard actions, Shift+Enter, long input, retained text after failure, and the absence of buttons in WebKit. It records the native bridge; native_smoke covers the real bridge and API.
+
+For the native partial-failure focus check, run `python tests/quick_entry/partial_gateway.py <existing-test-goal-id>`, then `/tmp/quick-bubble-smoke --partial`. The fixture returns a saved goal and a launch failure; it does not emulate successful agent execution. Stop the fixture afterwards.

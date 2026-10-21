@@ -142,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if up { self.showUI() } else { self.startBackend() }
         }
         quickEntry = QuickEntry(state: stateDir, base: uiURL, web: webView)
+        quickEntry.openMain = { [weak self] in self?.showWindow(nil) }
         indicator = UpdateIndicator(window: window, updater: updater)
         indicator.restart = { [unowned self] in restartToUpdate() }
         indicator.cancelRestart = { [unowned self] in

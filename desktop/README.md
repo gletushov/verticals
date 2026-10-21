@@ -302,7 +302,7 @@ No Developer ID signing or notarization yet.
 
 ## Quick Entry
 
-Press and release Command+Shift by themselves to open a small black field above another application. The modifiers used with another key does not open it. Save to Inbox (⌘Return) saves an undated note and returns focus; Send to agent starts a separate background conversation, available in the normal conversation list. Escape discards input. Failed submissions keep the text.
+Press and release Command+Shift by themselves to open a small black field above another application. The modifiers used with another key do not open it. The bubble shares SearchBar’s CSS and Commissioner font. Return saves an undated Inbox task and returns focus; ⌘Return creates a task, opens it in the same app and starts a linked agent conversation. Shift+Return adds a line. There are no action buttons. Escape discards input. Failed submissions keep the text.
 
 The native app needs macOS Accessibility access for global modifier-only shortcuts. The tray's Quick Entry command is also available. The macOS action assigned to Fn/Globe is not silently changed; check it on the owner's keyboard.
 

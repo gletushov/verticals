@@ -26,16 +26,38 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(self.chat.created[0][2]['title'],'Сделай отчёт')
         self.assertEqual(self.chat.sent,[])
         self.assertEqual(self.chat.created[0][3]['idempotency_key'],'quick-entry-capture-1')
-    def test_agent_gets_new_session_selected_settings_and_no_goal(self):
+    def test_agent_creates_goal_and_starts_linked_session(self):
         settings={'provider':'codex','permission':'read-only'}
         result=self.q.capture({'request':'agent-1','action':'agent','text':'Hello','settings':settings})
         self.assertTrue(result['session'])
         self.assertEqual(self.chat.sent[0][0],result['session'])
         self.assertEqual(self.chat.sent[0][3],settings)
-        self.assertEqual(self.chat.created,[])
+        self.assertEqual(result['goal'],'SAMPLE01')
+        self.assertEqual(len(self.chat.created),1)
+        self.assertEqual(self.chat.sent[0][2]['goal'],{'id':'SAMPLE01','title':'Hello'})
         entries=m.QuickEntry(self.tmp.name,self.chat).conversations()
         self.assertEqual(entries[0]['id'],result['session'])
         self.assertEqual(entries[0]['selection'],settings)
+    def test_agent_failure_keeps_created_goal_and_retry_does_not_duplicate(self):
+        body={'request':'retry-agent','action':'agent','text':'Hello'}
+        def fail(*args): raise RuntimeError('Agent unavailable')
+        self.chat.send=fail
+        first=self.q.capture(body)
+        self.assertEqual(first['goal'],'SAMPLE01')
+        self.assertIn('Agent unavailable',first['error'])
+        self.chat.send=lambda *args: self.chat.sent.append(args)
+        result=m.QuickEntry(self.tmp.name,self.chat).capture(body)
+        self.assertNotIn('error',result)
+        self.assertEqual(result['goal'],first['goal'])
+        self.assertEqual(len(self.chat.created),1)
+        self.assertEqual(len(self.chat.sent),1)
+        self.assertEqual(self.q.capture(body),result)
+        self.assertEqual(len(self.chat.sent),1)
+
+    def test_multiline_capture_keeps_original_text(self):
+        self.q.capture({'request':'lines','action':'inbox','text':'First\nSecond'})
+        self.assertEqual(self.chat.created[0][2]['body'],'First\nSecond')
+
     def test_empty_or_unknown_action_does_not_write(self):
         for body in [{'request':'a','action':'inbox','text':'  '},{'request':'b','action':'delete','text':'x'}]:
             with self.assertRaises(ValueError):self.q.capture(body)

@@ -413,7 +413,7 @@ def make_gateway(token, chat):
             self.send_response(200)
             self.send_header("Content-Type", TYPES.get(path.suffix, "application/octet-stream"))
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store" if path.name == "index.html"
+            self.send_header("Cache-Control", "no-store" if path.suffix == ".html"
                              else "public, max-age=31536000, immutable")
             self.end_headers()
             if self.command != "HEAD":

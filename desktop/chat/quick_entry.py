@@ -48,7 +48,7 @@ class QuickEntry:
     def onboard(self):
         marker = self.state / 'quick-entry-onboarding.json'
         if marker.exists(): return
-        body = 'Нажми и отпусти ⌘⇧ (Command + Shift) без других клавиш — откроется быстрый ввод. ⌘Enter сохраняет мысль в Inbox; «Отправить агенту» запускает разговор в фоне.\n\nОткрой Системные настройки → Конфиденциальность и безопасность → Универсальный доступ и разреши запущенной копии Verticals работать с клавиатурой.\n\nХочешь другое сочетание или ввод не работает? Нажми «Discuss with agent» в этой задаче и скажи агенту. После пробы задачу можно завершить — снова она не появится.'
+        body = 'Нажми и отпусти ⌘⇧ (Command + Shift) без других клавиш — откроется быстрый ввод. Enter сохраняет мысль в Inbox; ⌘Enter создаёт задачу, открывает её в Verticals и запускает агента.\n\nОткрой Системные настройки → Конфиденциальность и безопасность → Универсальный доступ и разреши запущенной копии Verticals работать с клавиатурой.\n\nХочешь другое сочетание или ввод не работает? Нажми «Discuss with agent» в этой задаче и скажи агенту. После пробы задачу можно завершить — снова она не появится.'
         result = self.chat.api('POST','/api/goals',
             {'title':'Попробовать быстрый ввод', 'body':body},
             idempotency_key='quick-entry-onboarding-v1')
@@ -71,22 +71,31 @@ class QuickEntry:
         with self.lock:
             receipt = self.state / 'quick-entry-receipts' / (key+'.json')
             old = read(receipt,{})
-            if old:
-                if old['digest'] != digest: raise ValueError('This request was already used for different text')
+            if old and old['digest'] != digest:
+                raise ValueError('This request was already used for different text')
+            if old and old.get('complete', True):
                 return old['result']
-            if action == 'inbox':
-                title = ' '.join(text.split())
-                payload = {'title': title if len(title)<=250 else title[:249]+'…'}
-                if len(title)>250: payload['body']=text
-                result = {'goal':self.chat.api('POST','/api/goals',payload,idempotency_key='quick-entry-'+key)['id']}
+            title = ' '.join(text.split())
+            title = title if len(title)<=250 else title[:249]+'…'
+            if old:
+                result = old['result']
             else:
-                session = str(uuid.uuid5(uuid.NAMESPACE_URL, 'verticals-quick-entry-'+key))
-                self.chat.send(session,text,{'quickEntry':True},body.get('settings'))
-                result = {'session':session}
-            entry = {'digest':digest,'result':result}
+                payload = {'title':title}
+                if text != title: payload['body']=text
+                result = {'goal':self.chat.api('POST','/api/goals',payload,idempotency_key='quick-entry-'+key)['id']}
+                write(receipt, {'digest':digest, 'result':result, 'complete':action == 'inbox'})
+            entry = {'digest':digest, 'result':result, 'complete':True}
             if action == 'agent':
+                session = str(uuid.uuid5(uuid.NAMESPACE_URL, 'verticals-quick-entry-'+key))
+                goal = {'id':result['goal'], 'title':title}
+                try:
+                    self.chat.send(session,text,{'quickEntry':True,'goal':goal},body.get('settings'))
+                except Exception as error:
+                    # The goal is durable before dispatch. Retry resumes this same goal.
+                    return {**result, 'error':str(error)}
+                result.update(session=session, title=title)
                 settings = body.get('settings') or {}
-                entry['thread'] = {'id':result['session'], 'title':text[:80],
+                entry['thread'] = {'id':session, 'title':text[:80], 'goal':goal,
                     'provider':settings.get('provider','claude'), 'selection':settings,
                     'updatedAt':int(time.time()*1000), 'status':'idle'}
             write(receipt,entry)

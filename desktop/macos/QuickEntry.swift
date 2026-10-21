@@ -6,25 +6,13 @@ final class EntryPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }
-final class EntryText: NSTextView {
-    var submit: (() -> Void)?
-    var cancel: (() -> Void)?
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { cancel?(); return }
-        if event.keyCode == 36 && event.modifierFlags.contains(.command) { submit?(); return }
-        super.keyDown(with: event)
-    }
-}
-
-final class QuickEntry: NSObject {
+final class QuickEntry: NSObject, WKScriptMessageHandler {
     let state: URL
     let base: URL
     let mainWeb: WKWebView
     var panel: EntryPanel!
-    var input = EntryText()
-    var message = NSTextField(labelWithString: "")
-    var saveButton: NSButton!
-    var agentButton: NSButton!
+    var entryWeb: WKWebView!
+    var openMain: (() -> Void)?
     var previous: NSRunningApplication?
     var busy = false
     var captureID = UUID().uuidString
@@ -134,61 +122,52 @@ final class QuickEntry: NSObject {
         if tap.flags(mask) { show() }
     }
     func buildPanel() {
-        panel = EntryPanel(contentRect: NSRect(x: 0, y: 0, width: 600, height: 208),
+        panel = EntryPanel(contentRect: NSRect(x: 0, y: 0, width: 600, height: 84),
                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = true
-        panel.isMovableByWindowBackground = true
-        panel.appearance = NSAppearance(named: .darkAqua)
-        let content = NSView(frame: panel.frame)
-        content.wantsLayer = true
-        content.layer?.backgroundColor = NSColor(calibratedWhite: 0.09, alpha: 1).cgColor
-        content.layer?.cornerRadius = 24
-        panel.contentView = content
-        input.isRichText = false; input.font = .systemFont(ofSize: 22)
-        input.textColor = .white; input.insertionPointColor = .white; input.backgroundColor = .clear
-        input.drawsBackground = false; input.textContainerInset = NSSize(width: 0, height: 8)
-        input.isVerticallyResizable = true; input.autoresizingMask = [.width]
-        input.textContainer?.widthTracksTextView = true
-        input.submit = { [weak self] in self?.send("inbox") }
-        input.cancel = { [weak self] in self?.close(cancel: true) }
-        let scroll = NSScrollView(frame: NSRect(x: 24, y: 74, width: 552, height: 110))
-        scroll.drawsBackground = false; scroll.hasVerticalScroller = true; scroll.documentView = input
-        input.frame = scroll.bounds
-        content.addSubview(scroll)
-        saveButton = NSButton(title: "В Inbox  ⌘↵", target: self, action: #selector(save))
-        agentButton = NSButton(title: "Отправить агенту", target: self, action: #selector(agent))
-        for (button, x, width) in [(saveButton!, 24.0, 150.0), (agentButton!, 190.0, 180.0)] {
-            button.bezelStyle = .rounded; button.frame = NSRect(x: x, y: 30, width: width, height: 32)
-            content.addSubview(button)
+        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
+        let config = WKWebViewConfiguration()
+        config.userContentController.add(self, name: "quickEntry")
+        entryWeb = WKWebView(frame: NSRect(x:0,y:0,width:600,height:84), configuration:config)
+        entryWeb.setValue(false, forKey:"drawsBackground")
+        entryWeb.autoresizingMask = [.width, .height]
+        panel.contentView = entryWeb
+        entryWeb.load(URLRequest(url:base.appendingPathComponent("quick-entry.html"), cachePolicy:.reloadIgnoringLocalCacheData))
+    }
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+        if action == "resize", let height = body["height"] as? Double {
+            let h = min(400, max(84, height))
+            let frame = panel.frame
+            panel.setFrame(NSRect(x:frame.minX,y:frame.maxY-h,width:frame.width,height:h),display:true)
+        } else if action == "cancel" { close(cancel:true) }
+        else if (action == "agent" || action == "inbox"), let text = body["text"] as? String { send(action, text:text) }
+    }
+    func ui(_ error: String = "", clear: Bool = false) {
+        let args: [Any] = [busy,error,clear]
+        if let data = try? JSONSerialization.data(withJSONObject:args), let json = String(data:data,encoding:.utf8) {
+            entryWeb.evaluateJavaScript("window.quickEntry?.state(..."+json+")", completionHandler:nil)
         }
-        message.frame = NSRect(x: 26, y: 5, width: 550, height: 22)
-        message.font = .systemFont(ofSize: 11); message.textColor = .secondaryLabelColor
-        content.addSubview(message)
     }
     @objc func show() {
-        if panel.isVisible { panel.makeKey(); panel.makeFirstResponder(input); return }
-        previous = NSWorkspace.shared.frontmostApplication
-        panel.center(); panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(input)
-        message.stringValue = "Записать мысль или поручить агенту"
+        if !panel.isVisible { previous = NSWorkspace.shared.frontmostApplication; panel.center() }
+        panel.orderFrontRegardless(); panel.makeKey(); panel.makeFirstResponder(entryWeb)
+        entryWeb.evaluateJavaScript("window.quickEntry?.focus()",completionHandler:nil)
     }
-    func close(cancel: Bool) {
+    func close(cancel: Bool, restore: Bool = true) {
         guard !busy else { return }
-        if cancel { input.string = ""; captureID = UUID().uuidString }
+        if cancel { captureID = UUID().uuidString; ui(clear:true) }
         panel.orderOut(nil)
-        previous?.activate(options: [])
+        if restore { previous?.activate(options: []) }
     }
-    @objc func save() { send("inbox") }
-    @objc func agent() { send("agent") }
-    func send(_ action: String) {
-        let text = input.string.trimmingCharacters(in: .whitespacesAndNewlines)
+    func send(_ action: String, text raw: String) {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !text.isEmpty else { return }
         if text != captureText || action != captureAction {
             captureID = UUID().uuidString; captureText = text; captureAction = action
         }
-        busy = true; saveButton.isEnabled = false; agentButton.isEnabled = false; input.isEditable = false
-        message.stringValue = "Отправляем…"
+        busy = true; ui()
         mainWeb.evaluateJavaScript("JSON.parse(localStorage.getItem('vt-chat:last-model-selection') || 'null')") { [weak self] selection, _ in
             guard let self else { return }
             var body: [String: Any] = ["request": self.captureID, "action": action, "text": text]
@@ -199,16 +178,29 @@ final class QuickEntry: NSObject {
             URLSession.shared.dataTask(with: request) { data, response, error in
                 let result = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any] ?? [:]
                 DispatchQueue.main.async {
-                    self.busy = false; self.saveButton.isEnabled = true; self.agentButton.isEnabled = true; self.input.isEditable = true
+                    self.busy = false
                     guard (response as? HTTPURLResponse)?.statusCode == 200, error == nil else {
-                        self.message.stringValue = result["error"] as? String ?? "Не удалось отправить. Текст сохранён — попробуйте ещё раз."
+                        self.ui(result["error"] as? String ?? "Не удалось отправить. Текст сохранён — попробуйте ещё раз.")
+                        return
+                    }
+                    if action == "agent", let goal = result["goal"] as? String {
+                        let path = "#goal/" + goal
+                        let encoded = try! JSONSerialization.data(withJSONObject:[path])
+                        let args = String(data:encoded,encoding:.utf8)!
+                        self.mainWeb.evaluateJavaScript("history.pushState(null,'',"+args+"[0]);window.dispatchEvent(new PopStateEvent('popstate'))",completionHandler:nil)
+                        self.openMain?()
+                    }
+                    if let error = result["error"] as? String {
+                        self.ui("Задача сохранена. " + error + " Повтори ⌘Enter для запуска агента.")
+                        self.show()
                         return
                     }
                     let event: [String: Any] = ["result": result, "text": text, "selection": selection ?? NSNull()]
                     if let json = try? JSONSerialization.data(withJSONObject: event), let value = String(data: json, encoding: .utf8) {
                         self.mainWeb.evaluateJavaScript("window.dispatchEvent(new CustomEvent('verticals-quick-entry', {detail: \(value)}))", completionHandler: nil)
                     }
-                    self.input.string = ""; self.captureID = UUID().uuidString; self.close(cancel: false)
+                    self.ui(clear:true); self.captureID = UUID().uuidString; self.close(cancel: false, restore:action == "inbox")
+                    if action == "agent" { self.openMain?() }
                 }
             }.resume()
         }
