@@ -131,8 +131,28 @@ for the chat, an agent CLI: `claude` (signed in) and optionally `codex`.
    The first run creates `.local-verticals-desktop/` (venv with the dependencies, database with the
    sample board, token). Ctrl-C stops everything and keeps the data.
 
+   If `desktop/build/web` is missing and `web/node_modules` is there, the launcher builds it this way itself.
+
 Ports: UI 8288, API 8299, MCP 8281, PostgreSQL 55539 (override with `VERTICALS_DESKTOP_UI_PORT`,
-`..._API_PORT`, `..._MCP_PORT`, `..._PG_PORT`). State: `VERTICALS_DESKTOP_STATE`.
+`..._API_PORT`, `..._MCP_PORT`, `..._PG_PORT`). State: `VERTICALS_DESKTOP_STATE`. A database left running by a
+launcher that was killed is reused by the next start.
+
+### Windows
+
+There is no app to build: the same `launcher.py` starts the services, the gateway and the chat, and the board opens in a
+browser. What differs between the systems lives in `verticals/host/` (`posix.py`, `windows.py`), never in the launcher.
+
+```powershell
+npm --prefix web ci                 # once (or python tools/local.py setup)
+python desktop/launcher.py          # UI: http://127.0.0.1:8288/ (builds desktop/build/web on first run)
+python desktop/launcher.py mcp      # how to connect an agent to MCP
+```
+
+PostgreSQL 16 is found as `tools/local.py` finds it (see the main README); Python 3.12 is also found through the `py`
+launcher. Closing the console window stops everything as Ctrl-C does. The API's and MCP server's output goes to `api.log`
+and `mcp.log`, as on macOS. Claude's system prompt travels in a file (`--append-system-prompt-file`), because the
+morning report's prompt is close to Windows' 32,767-character command line. Opening a task's session in a terminal is
+macOS-only for now.
 
 ## Build the app
 
