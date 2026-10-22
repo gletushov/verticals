@@ -2,7 +2,7 @@
    mascot at rest, the field you type into, the agent's step, answer and ask, with the tags and what waits while a goal
    moves above it. */
 import { useLayoutEffect, type MouseEvent, type ReactNode } from 'react'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from '../reactivity'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from '../reactivity'
 import { store } from '../store'
 import { commandFilter, filterText } from '../lib/commandFilter'
 import { historyKey } from '../lib/boardHistory'
@@ -13,6 +13,7 @@ import { agentChat, decide, openAsk, stop } from '../lib/agentChat'
 import { answerUndo } from '../lib/answerUndo'
 import { plainWords } from '../lib/chatMarkdown'
 import { closeWindows, windows } from '../lib/windows'
+import { viewport } from '../lib/viewport'
 import { mascot, useMascot, watchBoardNews } from '../lib/mascot'
 import { followWords } from '../lib/finding'
 import { curve, reducedMotion } from '../lib/motion'
@@ -108,11 +109,10 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
     }
     const still = ref(true)
     const lines = ref(1)
-    const room = reactive({ width: typeof innerWidth === 'number' ? innerWidth : 1440 })
 
     const state = circleState
     const text = computed(() => commandFilter.text)
-    const maxWidth = computed(() => Math.max(CIRCLE, Math.min(720, room.width - 32)))
+    const maxWidth = computed(() => Math.max(CIRCLE, Math.min(720, viewport.width - 32)))
 
     /* Under a pointer that can hover, the resting circle only widens: 116 px, its line 5 × 46 px and upright, the buttons
        above it 38 px (circleField.css). It opens on a click, a key or ⌘K, never on the pointer (docs/design/field-hover.md). */
@@ -217,7 +217,7 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
         return Math.max(CIRCLE, PAD_Y * 2 + chipWords.value + chipsHeight.value + (undoable.value ? UNDO_ROW : 0))
       }
       if (state.value === 'answer') {
-        const ask = circleWords.value?.kind === 'ask' ? 44 + (leadLines.value ? leadLines.value * 22 + 8 : 0) : 0
+        const ask = circleWords.value?.kind === 'ask' ? (openAsk.value?.options.length ? 44 : 0) + (leadLines.value ? leadLines.value * 22 + 8 : 0) : 0
         return Math.max(CIRCLE, PAD_Y * 2 + answerLines.value * 22 + ask + (undoable.value ? UNDO_ROW : 0))
       }
       return CIRCLE
@@ -528,7 +528,6 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
       if (circleWords.value?.kind === 'answer') reply()
       else if (!circleWords.value) focusField()
     }
-    function onResize(): void { room.width = innerWidth }
 
     exposeTo(props.expose, { focusField })
 
@@ -541,7 +540,6 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
       const match = /^\/search\/(.*)/.exec(location.pathname)
       if (match?.[1]) { try { commandFilter.text = decodeURIComponent(match[1]) } catch { commandFilter.text = match[1] } }
       window.addEventListener('keydown', onWindowKeyDown, true)
-      window.addEventListener('resize', onResize)
       hoverQuery?.addEventListener('change', onCanHover)
       document.fonts?.addEventListener('loadingdone', onFontsLoaded)
       stopNews = watchBoardNews()
@@ -553,7 +551,6 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
       chipsWatch?.disconnect()
       brushing?.stop()
       window.removeEventListener('keydown', onWindowKeyDown, true)
-      window.removeEventListener('resize', onResize)
       hoverQuery?.removeEventListener('change', onCanHover)
       document.fonts?.removeEventListener('loadingdone', onFontsLoaded)
       stopNews?.()
@@ -659,7 +656,7 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
               <path d="M12 21.5V3M12 3 5 10M12 3l7 7" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          {words ? (
+          {words && state === 'answer' ? (
             <div
               className={cx('circle-field__answer', [`circle-field__answer--${words.kind}`, { 'circle-field__answer--chips': answerChips.length }])}
               data-role="circle-answer"
@@ -678,7 +675,7 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
                 </div>
               ) : null}
               {s.undoable.value && words.kind === 'answer' ? <AnswerUndo answer={words.answer} className="circle-field__answer-undo" /> : null}
-              {words.kind === 'ask' && ask ? (
+              {words.kind === 'ask' && ask?.options.length ? (
                 <div className="circle-field__answer-choices">
                   {ask.options.map((option) => (
                     <button key={option.value} type="button" className="circle-field__answer-choice"

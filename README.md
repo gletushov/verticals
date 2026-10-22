@@ -16,13 +16,17 @@ Agents write almost all of the code; two of us hold the bar and aim for an Apple
 Most of what you see we still don't like, so tell us what you hate. For now, expect things to break.
 
 It runs on your Mac and keeps your data there. You need Claude Code or Codex, signed in.
+The light and dark appearance follows macOS, including changes while the app is open, or stays Light or Dark from View → Appearance.
+Dark appearance uses soft grey text while keeping task and document text readable.
 The app is in [Releases](https://github.com/konstantinopolskii/verticals/releases); it still
 carries its old name, Verticals. Open source under the GNU Affero General Public License v3.0,
 see [License](#license).
 
 ## Native local startup
 
-Requires Python 3.12, Node 22+ with npm, PostgreSQL 16 including pg_trgm.
+Requires Python 3.12, Node 22+ with npm, PostgreSQL 16 including pg_trgm and ICU support.
+Search ignores letter case in titles and notes, including Cyrillic, even in databases
+initialized with locale C.
 No system database service needed. Homebrew/Linux binaries are detected; override
 with VERTICALS_PG_BIN pointing to the PostgreSQL bin directory.
 
@@ -40,6 +44,23 @@ Setup verifies bundled UI archives against the lockfile, installs dependencies,
 typechecks and builds. Start migrates and rebuilds with the local instance's token.
 This is a local preview, not a public server. Never publish its generated bundle:
 it contains the local token. MCP is not started by the UI launcher. Docker is optional.
+
+### Windows
+
+The same two commands, with `python` (or `py -3.12`) instead of `python3`. PostgreSQL 16 is
+found at the EDB installer's default `C:\Program Files\PostgreSQL\16\bin`, or, without admin
+rights, unpack the server binaries zip from EnterpriseDB
+(`postgresql-16.x-windows-x64-binaries.zip`: its `bin`, `lib` and `share`) into
+`%LOCALAPPDATA%\Programs\PostgreSQL\16`. Anywhere else: set `VERTICALS_PG_BIN`.
+The database runs only while the launcher does; no Windows service is installed. Closing the
+launcher's console window stops everything as Ctrl-C does. A database left running by a killed
+launcher is reused by the next start, on every system. What differs between the systems lives in
+`verticals/host/` (`posix.py`, `windows.py`); the launchers themselves are the same everywhere.
+The desktop launcher with the agent chat runs on Windows too: see `desktop/README.md`.
+
+`.claude/skills/` holds symlinks. Git checks them out as plain files unless symlinks are
+allowed (Developer Mode, then `git config core.symlinks true` and a fresh checkout); without
+that, Claude Code does not see the repository's skills.
 
 ## Collaboration
 
@@ -69,6 +90,14 @@ and time-tracking sources are optional evidence inputs when configured and autho
 For the report skill, set the reader's timezone, report destination, available sources,
 and optional cadence in the owner's local workspace instructions; see its
 `references/setup.md`. No personal path, account, or schedule is baked into the pack.
+
+Codex morning turns expose the reading tools named by approved sources on configured
+MCP servers. Other servers and plugins remain disabled; ordinary board conversations
+still expose only the desktop connection. A server disabled in the owner's Codex
+configuration stays disabled. New source approvals take effect on the next morning
+agent launch.
+Source documents show their check and Approve button both in a window and at a direct
+document address, without visiting the Inbox first.
 
 ## Verification
 
