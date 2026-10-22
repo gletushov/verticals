@@ -1,8 +1,8 @@
 """Mouse editing and pasted search drafts keep the native field usable."""
 import pytest
 from playwright.sync_api import expect
-from tests.ui.test_agent_conversation import CONVERSATION, _answered, _send, ui_agent
-from tests.ui.test_goal_window import _discuss
+from tests.ui.test_agent_conversation import CONVERSATION, ui_agent
+from tests.ui.test_goal_window import _discuss, _send
 from tests.ui.views import FIELD
 
 
@@ -30,13 +30,16 @@ def test_double_click_keeps_the_native_selection(ui_agent):
     expect(field).to_have_value('X beta gamma')
 
 
-def test_click_inside_the_field_brings_the_conversation_back(ui_agent):
+def test_click_inside_a_draft_brings_the_conversation_back(ui_agent):
     page = ui_agent.page
-    page.wait_for_selector('.goal-card__row')
-    _send(page, 'Plan the week [slow]')
-    _answered(page, 'Done: Plan the week')
-    page.locator('[data-role="out-of-focus"]').click(position={'x': 60, 'y': 60})
-    expect(page.locator(CONVERSATION)).to_have_count(0)
-    page.locator(FIELD).click()
+    _discuss(page)
+    _send(page, 'Plan the week')
     expect(page.locator(CONVERSATION)).to_have_count(1)
-    expect(page.locator(FIELD)).to_be_focused()
+    page.keyboard.press('Control+k')
+    page.locator(FIELD).fill('Alpha beta gamma')
+    page.locator(CONVERSATION).click(position={'x': 10, 'y': 10})  # beside the balloons
+    expect(page.locator(CONVERSATION)).to_have_count(0)
+    field = page.locator(FIELD)
+    field.click(position={'x': 4, 'y': 15})
+    expect(page.locator(CONVERSATION)).to_have_count(1)
+    assert field.evaluate('e => e.selectionStart') < 5
