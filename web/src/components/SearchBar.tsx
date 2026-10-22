@@ -384,13 +384,16 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
       words.typed(value)
       moved()
     }
-    function focusField(): void {
-      const el = input.value
-      if (!el) return
-      // Typing, or a click on the field, brings the conversation back; over a window, always (S2.P1.011, .018).
+    // Typing, or a click on the field, brings the conversation back; over a window, always (S2.P1.011, .018).
+    function engage(): void {
       if (windows.list.length && agentChat.available) agentChat.engaged = true
       // In the Inbox the field writes: an earlier conversation stays where it is until you ask (lib/inbox.ts).
       if (agentChat.engaged && !agentChat.open && (store.state.activeView !== 'inbox' || windows.list.length)) agentChat.open = true
+    }
+    function focusField(): void {
+      const el = input.value
+      if (!el) return
+      engage()
       el.focus({ preventScroll: true })
       const end = el.value.length
       el.setSelectionRange(end, end)
@@ -519,7 +522,8 @@ export const SearchBar = tracked(function SearchBar(raw: Props & Record<string, 
       focusField()
     }
     function onShapeClick(event: MouseEvent): void {
-      if (event.target === input.value) return
+      // A click on the words keeps the caret the browser placed there.
+      if (event.target === input.value) { engage(); return }
       if (brushing?.swallowed()) return // the end of a drag is no click on the answer
       if (circleWords.value?.kind === 'answer') reply()
       else if (!circleWords.value) focusField()
