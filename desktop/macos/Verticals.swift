@@ -8,10 +8,12 @@ import Cocoa
 import ServiceManagement
 import WebKit
 
-let uiURL = URL(string: "http://127.0.0.1:8288/")!
-let healthURL = URL(string: "http://127.0.0.1:8288/healthz")!
-let busyURL = URL(string: "http://127.0.0.1:8288/__chat/busy")!
-let mcpURL = "http://127.0.0.1:8281/mcp"
+let uiPort = UserDefaults.standard.integer(forKey: "UIPort") == 0 ? 8288 : UserDefaults.standard.integer(forKey: "UIPort")
+let uiURL = URL(string: "http://127.0.0.1:\(uiPort)/")!
+let healthURL = uiURL.appendingPathComponent("healthz")
+let busyURL = uiURL.appendingPathComponent("__chat/busy")
+let mcpPort = UserDefaults.standard.integer(forKey: "MCPPort") == 0 ? 8281 : UserDefaults.standard.integer(forKey: "MCPPort")
+let mcpURL = "http://127.0.0.1:\(mcpPort)/mcp"
 // `-ReleasesAPI <url>` on the command line points the updater elsewhere (tests).
 let releasesAPI = URL(string: UserDefaults.standard.string(forKey: "ReleasesAPI")
     ?? "https://api.github.com/repos/konstantinopolskii/verticals/releases/latest")!
@@ -42,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var indicator: UpdateIndicator!
     var relaunching = false
     var tray: NSStatusItem!
+    var quickEntry: QuickEntry!
     var serving = false
     // Opened at login or relaunched by an update made while the window was closed: menu bar only.
     var startHidden = false
@@ -73,19 +76,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             updater.installOnQuit(relaunch: true)
             exit(0)
         }
+        applyAppearance()
         buildMenu()
         buildTray()
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.userContentController.add(self, name: "zoom")
         webView = WebView(frame: .zero, configuration: config)
+        webView.underPageBackgroundColor = Self.pageColor
         let zoom = UserDefaults.standard.double(forKey: "PageZoom")
         if zoom > 0 { webView.pageZoom = zoom }
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.isHidden = true
 
-        status = NSTextField(labelWithString: "Starting Verticals…")
+        status = NSTextField(labelWithString: "")
+        status.isHidden = true
         status.font = .systemFont(ofSize: 15)
         status.textColor = .secondaryLabelColor
         status.alignment = .center
@@ -109,12 +115,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                           backing: .buffered, defer: false)
         window.title = "Verticals"
-        // The page shows through the title bar, only the window buttons stay; the UI has no dark theme.
+        // The page shows through the title bar; appearance is the app's (View → Appearance).
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.backgroundColor = .white
-        window.appearance = NSAppearance(named: .aqua)
+        window.backgroundColor = Self.pageColor
         window.contentView = content
         window.delegate = self
         window.isReleasedWhenClosed = false
@@ -138,6 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         healthy { up in
             if up { self.showUI() } else { self.startBackend() }
         }
+        quickEntry = QuickEntry(state: stateDir, base: uiURL, web: webView)
+        quickEntry.openMain = { [weak self] in self?.showWindow(nil) }
         indicator = UpdateIndicator(window: window, updater: updater)
         indicator.restart = { [unowned self] in restartToUpdate() }
         indicator.cancelRestart = { [unowned self] in
@@ -177,6 +184,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         var env = ProcessInfo.processInfo.environment.merging(agentEnvironment) { _, chosen in chosen }
         env["PATH"] = agentPath
         env["VERTICALS_DESKTOP_STATE"] = stateDir.path
+        for (setting, variable) in [("UIPort", "UI"), ("APIPort", "API"), ("MCPPort", "MCP"), ("PGPort", "PG")] {
+            let port = UserDefaults.standard.integer(forKey: setting)
+            if port > 0 { env["VERTICALS_DESKTOP_\(variable)_PORT"] = String(port) }
+        }
         env["VERTICALS_DESKTOP_PYTHONPATH"] = "\(res):\(res)/site"
         env["VERTICALS_PG_BIN"] = (try? String(contentsOf: resources.appendingPathComponent("pg/BINDIR"), encoding: .utf8))
             .map { "\(res)/pg/" + $0.trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
@@ -205,8 +216,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return fail("Could not start Verticals: \(error.localizedDescription)")
         }
         backend = process
-        status.stringValue = "Starting Verticals… (the first launch sets up the database, about a minute)"
-        waitForBackend(attempts: 240)
+        // A usual start takes about a second and shows only the board's colour; words appear only when it runs long.
+        let firstLaunch = !FileManager.default.fileExists(atPath: stateDir.appendingPathComponent("postgres").path)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            guard !self.serving, self.backend === process, process.isRunning else { return }
+            self.status.stringValue = firstLaunch ? "Setting up Verticals… the first launch takes about a minute" : "Starting Verticals…"
+            self.status.isHidden = false
+        }
+        waitForBackend(attempts: 1200)
     }
 
     func waitForBackend(attempts: Int) {
@@ -215,14 +232,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard attempts > 0, self.backend?.isRunning == true else {
                 return self.fail("Verticals did not start. See \(self.logPath).")
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.waitForBackend(attempts: attempts - 1) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.waitForBackend(attempts: attempts - 1) }
         }
     }
 
     func showUI() {
+        quickEntry?.loadIfNeeded()
         serving = true
         tray.button?.appearsDisabled = false
         status.isHidden = true
+        // The page fades in once it has loaded (webView(_:didFinish:)), not as an empty frame.
+        webView.alphaValue = 0
         webView.isHidden = false
         let reopen = UserDefaults.standard.string(forKey: "ReopenPage").flatMap { URL(string: $0) }
         UserDefaults.standard.removeObject(forKey: "ReopenPage")
@@ -280,11 +300,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         quitting = true
         Task {
             await savePage()
+            let hidden = !window.isVisible
+            window.orderOut(nil)
             if let process = backend, process.isRunning {
                 // SIGTERM makes the launcher stop the services and shut PostgreSQL down cleanly.
-                status.stringValue = "Stopping Verticals…"
-                status.isHidden = false
-                webView.isHidden = true
                 process.terminate()
                 await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
                     DispatchQueue.global().async {
@@ -294,10 +313,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     }
                 }
             }
-            updater.installOnQuit(relaunch: relaunching, hidden: !window.isVisible)
+            if updater.readyToInstall {
+                updater.installOnQuit(relaunch: relaunching, hidden: hidden)
+            } else if relaunching {
+                reopenAfterQuit(hidden: hidden)
+            }
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+
+    // With an update downloaded this is the title bar's Restart.
+    @objc func restart(_ sender: Any?) {
+        if updater.readyToInstall {
+            if !updater.state.restart { restartToUpdate() }
+            return
+        }
+        relaunching = true
+        NSApp.terminate(nil)
+    }
+
+    // Waits for this process, then its launcher and PostgreSQL (a minute between them), so the new launcher finds its
+    // ports free. A test run's -StateDir goes along.
+    func reopenAfterQuit(hidden: Bool) {
+        var args = UserDefaults.standard.string(forKey: "StateDir").map { ["-StateDir", $0] } ?? []
+        if hidden { args += ["-StartHidden", "YES"] }
+        let opener = Process()
+        opener.executableURL = URL(fileURLWithPath: "/bin/sh")
+        opener.arguments = ["-c", """
+            while kill -0 "$1" 2>/dev/null; do sleep 0.2; done
+            pg=$(head -n 1 "$3/postgres/postmaster.pid" 2>/dev/null); waited=0
+            for pid in "$2" "$pg"; do
+                while [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && [ $waited -lt 300 ]; do sleep 0.2; waited=$((waited + 1)); done
+            done
+            app=$4; shift 4; exec /usr/bin/open "$app" "$@"
+            """, "reopen", String(getpid()), backend.map { String($0.processIdentifier) } ?? "", stateDir.path,
+            Bundle.main.bundleURL.path] + (args.isEmpty ? [] : ["--args"] + args)
+        try? opener.run()
     }
 
     // Edits still waiting out their debounce reach the API before it stops; a restart reopens this page.
@@ -333,6 +385,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.setActivationPolicy(.accessory)
         installWhenIdle()
     }
+
+    @objc func showQuickEntry(_ sender: Any?) { quickEntry?.show() }
 
     @objc func showWindow(_ sender: Any?) {
         NSApp.setActivationPolicy(.regular)
@@ -375,6 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return i
         }
         menu.addItem(item("Open Verticals", #selector(showWindow(_:))))
+        menu.addItem(item("Quick Entry", #selector(showQuickEntry(_:))))
         menu.addItem(.separator())
         let state = item(serving ? "Board and MCP are running" : backend?.isRunning == true ? "Starting…" : "Stopped, see app.log", nil)
         state.isEnabled = false
@@ -398,6 +453,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(login)
         menu.addItem(.separator())
         menu.addItem(item("Check for Updates…", #selector(checkForUpdatesNow(_:))))
+        menu.addItem(item("Restart Verticals", #selector(restart(_:))))
         menu.addItem(item("Quit Verticals", #selector(NSApplication.terminate(_:))))
     }
 
@@ -553,6 +609,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     // MARK: web view
 
+    // The board's own background (web/src/tokens.css), so the window and the page are one colour from the first frame.
+    static let pageColor = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0x1c / 255.0, green: 0x1c / 255.0, blue: 0x1e / 255.0, alpha: 1) : .white
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { reveal() }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { reveal() }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { reveal() }
+
+    func reveal() {
+        guard webView.alphaValue < 1 else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.2
+            webView.animator().alphaValue = 1
+        }
+    }
+
     // Links that leave the app (target=_blank or another origin) open in the default browser.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
@@ -655,6 +729,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         app.addItem(.separator())
         app.addItem(item("Hide Verticals", #selector(NSApplication.hide(_:)), "h"))
         app.addItem(.separator())
+        let restartItem = item("Restart Verticals", #selector(restart(_:)), "")
+        restartItem.target = self
+        app.addItem(restartItem)
         app.addItem(item("Quit Verticals", #selector(NSApplication.terminate(_:)), "q"))
         let edit = NSMenu(title: "Edit")
         edit.addItem(item("Undo", Selector(("undo:")), "z"))
@@ -686,6 +763,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let motionItem = item("Reduce Motion", #selector(toggleReduceMotion(_:)), "")
         motionItem.target = self
         view.addItem(motionItem)
+        let appearance = NSMenu(title: "Appearance")
+        for (title, name) in Self.appearances {
+            let choice = item(title, #selector(chooseAppearance(_:)), "")
+            choice.target = self
+            choice.representedObject = name?.rawValue
+            appearance.addItem(choice)
+        }
+        let appearanceItem = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
+        appearanceItem.submenu = appearance
+        view.addItem(appearanceItem)
         view.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
         let win = NSMenu(title: "Window")
         win.addItem(item("Minimize", #selector(NSWindow.miniaturize(_:)), "m"))
@@ -723,10 +810,32 @@ extension AppDelegate: NSMenuItemValidation {
     // The checkmark is read when the menu opens, so it follows macOS while the person has not chosen.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(toggleReduceMotion(_:)) { item.state = reduceMotion ? .on : .off }
+        if item.action == #selector(chooseAppearance(_:)) {
+            item.state = item.representedObject as? String == appearanceChoice ? .on : .off
+        }
         if item.action == #selector(zoomIn(_:)) { return webView != nil && webView.pageZoom < 2 }
         if item.action == #selector(zoomOut(_:)) { return webView != nil && webView.pageZoom > 0.5 }
         if item.action == #selector(actualSize(_:)) { return webView != nil }
         return true
+    }
+}
+
+// MARK: Appearance (View menu)
+//
+// System follows macOS; Light or Dark is kept in the app's defaults (`Appearance`). The whole app takes it, and the page's
+// `prefers-color-scheme` follows the web view's appearance (web/src/tokens.css), so the page needs no switch of its own.
+extension AppDelegate {
+    static let appearances: [(String, NSAppearance.Name?)] = [("System", nil), ("Light", .aqua), ("Dark", .darkAqua)]
+
+    var appearanceChoice: String? { UserDefaults.standard.string(forKey: "Appearance") }
+
+    func applyAppearance() {
+        NSApp.appearance = appearanceChoice.flatMap { NSAppearance(named: NSAppearance.Name($0)) }
+    }
+
+    @objc func chooseAppearance(_ sender: NSMenuItem) {
+        UserDefaults.standard.set(sender.representedObject as? String, forKey: "Appearance")
+        applyAppearance()
     }
 }
 

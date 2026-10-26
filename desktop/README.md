@@ -59,6 +59,14 @@ View → Zoom In (⌘+, or ⌘=), Zoom Out (⌘−) and Actual Size (⌘0) chang
 editing a task or writing in the chat. The browser-style steps range from 50% to 200% and use the
 same saved setting as the developer panel. The chosen scale survives a reload and the next launch.
 
+## Appearance
+
+View → Appearance chooses System, Light or Dark. System follows macOS; Light or Dark is kept in the app's defaults
+(`Appearance`: `defaults delete app.verticals.desktop Appearance` hands it back to macOS). The window, title bar,
+update popover and page take the choice: the app sets its own appearance, and the page's `prefers-color-scheme`
+follows the web view's (`web/src/tokens.css`). A change updates an open window immediately and keeps the current view
+and draft.
+
 ## Reduce Motion
 
 View → Reduce Motion is a checkmark between Reload and Enter Full Screen. It starts as macOS's own Reduce motion
@@ -91,6 +99,8 @@ board and MCP are running, and has:
 - A link `verticals://goal/<id>` — the app is registered for the `verticals` scheme: a click on one in Terminal or
   Codex brings the window forward and opens that task (`board/#goal/<id>`); a link in the board's own page does the same.
 - Open at Login — a login item (`SMAppService`); at login Vertical starts in the menu bar only.
+- Restart Verticals — quits as Quit does and opens the app again on the same page; with an update downloaded it is
+  the title bar's Restart. Also in the Verticals menu.
 - Quit Verticals — the only way, with ⌘Q, to stop the board and MCP.
 
 ## Which account the agents use
@@ -128,8 +138,28 @@ for the chat, an agent CLI: `claude` (signed in) and optionally `codex`.
    The first run creates `.local-verticals-desktop/` (venv with the dependencies, database with the
    sample board, token). Ctrl-C stops everything and keeps the data.
 
+   If `desktop/build/web` is missing and `web/node_modules` is there, the launcher builds it this way itself.
+
 Ports: UI 8288, API 8299, MCP 8281, PostgreSQL 55539 (override with `VERTICALS_DESKTOP_UI_PORT`,
-`..._API_PORT`, `..._MCP_PORT`, `..._PG_PORT`). State: `VERTICALS_DESKTOP_STATE`.
+`..._API_PORT`, `..._MCP_PORT`, `..._PG_PORT`). State: `VERTICALS_DESKTOP_STATE`. A database left running by a
+launcher that was killed is reused by the next start.
+
+### Windows
+
+There is no app to build: the same `launcher.py` starts the services, the gateway and the chat, and the board opens in a
+browser. What differs between the systems lives in `verticals/host/` (`posix.py`, `windows.py`), never in the launcher.
+
+```powershell
+npm --prefix web ci                 # once (or python tools/local.py setup)
+python desktop/launcher.py          # UI: http://127.0.0.1:8288/ (builds desktop/build/web on first run)
+python desktop/launcher.py mcp      # how to connect an agent to MCP
+```
+
+PostgreSQL 16 is found as `tools/local.py` finds it (see the main README); Python 3.12 is also found through the `py`
+launcher. Closing the console window stops everything as Ctrl-C does. The API's and MCP server's output goes to `api.log`
+and `mcp.log`, as on macOS. Claude's system prompt travels in a file (`--append-system-prompt-file`), because the
+morning report's prompt is close to Windows' 32,767-character command line. Opening a task's session in a terminal is
+macOS-only for now.
 
 ## Build the app
 
@@ -276,7 +306,9 @@ cannot tell, is slow (25 seconds), fails, is Codex or is not there, it is a requ
   folders (`~/verticals`, `~/Developer/verticals`, …). With none, or with Vertical-only access, the task and its documents
   still come and only the pull request waits. An explicitly selected checkout is also the working folder of new
   conversations, and of resumed conversations that used the default chat workspace. Sessions linked from other projects
-  keep their own folder.
+  keep their own folder. Source validation is deferred until code work needs the checkout: it never blocks gateway startup.
+  Morning report writing/checking, account probes and report classification use the private chat workspace, independently
+  of source-folder permissions.
 
 ## Security notes
 
@@ -298,3 +330,15 @@ MVP. Codex support follows the `app-server` protocol. Verified with Codex CLI
 and a read-only board query returning sample goals through the local MCP relay. This checks
 the backend flow; it does not establish every provider/model or packaged-app combination.
 No Developer ID signing or notarization yet.
+
+## Quick Entry
+
+Press Command+Shift+Space to open a small black field above another application. The bubble shares SearchBar’s CSS and Commissioner font. Return saves an undated Inbox task and returns focus; ⌘Return creates a task, opens it in the same app and starts a linked agent conversation. Shift+Return adds a line. There are no action buttons. Escape discards input. Failed submissions keep the text.
+
+Command+Shift+Space is the only default shortcut and uses Carbon without Accessibility permission. The tray’s Quick Entry command is also available. A custom modifier-only binding requires Accessibility; the app never prompts automatically.
+
+Ask the agent to change the binding using `quick_entry_binding`; no binding settings are shown in the UI. Read with no arguments, or set `binding` to `cmd+shift+key:49`, `fn`, `key:49` (Space), or a macOS virtual key code prefixed with `ctrl+`, `alt+`, `shift+`, `cmd+`. Native registration is acknowledged, persisted, and the previous binding is retained on failure. Registration cannot prove that no other app also observes the gesture.
+
+For an isolated native test copy, give it its own bundle identifier and set its defaults `StateDir`, `UIPort`, `APIPort`, `MCPPort`, and `PGPort`; the native launcher forwards the ports to its bundled backend. Point `ReleasesAPI` at an inert local URL to keep test copies out of release updates.
+
+On first launch, a single Inbox task explains Quick Entry and changing the binding through the agent in that task. A saved marker keeps completed or deleted onboarding from returning.
