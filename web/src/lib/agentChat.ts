@@ -228,6 +228,7 @@ function saveSelection(): void {
 /** The desktop timer keeps these settings when WebKit suspends the window. */
 export async function syncMorningSettings(): Promise<void> {
   if (!agentChat.available || !agentChat.selection) return
+  if ('accessChosen' in agentChat && !agentChat.accessChosen) return
   await api('morning', { settings: agentChat.selection, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
     .catch(() => undefined)
 }

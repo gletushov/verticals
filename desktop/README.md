@@ -32,7 +32,8 @@ launcher has its own ports, database, state directory and UI build.
   even when the window is inactive or suspended by macOS. The window saves its selected agent settings in the private
   state file `morning.json`; the timer waits while an agent is working and uses the same atomic daily reservation as
   the window. The report and its conversation are linked to the Morning report task. A failed dispatch is retained
-  for retry. The app must remain running: sleeping Macs catch up after wake, and a closed app catches up when opened.
+  for retry. If the initial agent-access choice is present, the timer receives settings only after that choice.
+  The app must remain running: sleeping Macs catch up after wake, and a closed app catches up when opened.
 - `chat/agent_sessions.py` — the sessions of tasks (docs/design/task-sessions.md). A session is a file its agent writes
   (Claude Code's `projects/<folder>/<id>.jsonl`, Codex's `sessions/<y>/<m>/<d>/rollout-<time>-<id>.jsonl`, under
   `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, else `~/.claude` / `~/.codex`), and Vertical reads only its size and modified time:
