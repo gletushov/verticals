@@ -267,9 +267,9 @@ export function chooseInitialAccess(full: boolean): void {
   }
   save(KEY.prefs, prefs)
   saveThreads()
-  if (agentChat.selection) choose({ permission: prefs[agentChat.selection.provider]?.permission })
   save(KEY.access, true)
   agentChat.accessChosen = true
+  if (agentChat.selection) choose({ permission: prefs[agentChat.selection.provider]?.permission })
 }
 
 export async function refreshAgents(): Promise<void> {
